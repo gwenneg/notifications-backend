@@ -124,23 +124,19 @@ public class EndpointResources extends DatasourceProvider {
 
         final String query = limiter == null ? queryBuilder.toString() : limiter.getModifiedQuery(queryBuilder.toString());
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            PostgresqlStatement statement = c.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", type.ordinal());
+        return connectionPublisherUni.get().onItem().transformToMulti(connection -> {
+            PostgresqlStatement statement = connection.createStatement(query)
+                    .bind("$1", tenant)
+                    .bind("$2", type.ordinal());
 
-                            if (activeOnly != null) {
-                                statement = statement.bind("$3", activeOnly);
-                            }
+            if (activeOnly != null) {
+                statement = statement.bind("$3", activeOnly);
+            }
 
-                            Flux<PostgresqlResult> execute = statement.execute();
-                            return this.mapResultSetToEndpoint(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            Flux<PostgresqlResult> execute = statement.execute();
+            return Multi.createFrom().publisher(this.mapResultSetToEndpoint(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Integer> getEndpointsCountPerType(String tenant, Endpoint.EndpointType type, Boolean activeOnly) {
@@ -155,24 +151,20 @@ public class EndpointResources extends DatasourceProvider {
 
         final String query = queryBuilder.toString();
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            PostgresqlStatement statement = c.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", type.ordinal());
+        return connectionPublisherUni.get().flatMap(connection -> {
+            PostgresqlStatement statement = connection.createStatement(query)
+                    .bind("$1", tenant)
+                    .bind("$2", type.ordinal());
 
-                            if (activeOnly != null) {
-                                statement = statement.bind("$3", activeOnly);
-                            }
+            if (activeOnly != null) {
+                statement = statement.bind("$3", activeOnly);
+            }
 
-                            Flux<PostgresqlResult> execute = statement.execute();
-                            return execute.flatMap(r -> r.map((row, rowMetadata) -> row.get(0, Integer.class)));
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+            return Uni.createFrom().publisher(
+                    statement.execute()
+                            .flatMap(r -> r.map((row, rowMetadata) -> row.get(0, Integer.class)))
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<Endpoint> getTargetEndpoints(String tenant, String bundleName, String applicationName, String eventTypeName) {
@@ -187,21 +179,17 @@ public class EndpointResources extends DatasourceProvider {
                 "JOIN accepted_event_types aet ON aet.id = et.event_type_id " +
                 "WHERE et.account_id = $3 AND e.enabled = true";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", applicationName)
-                                    .bind("$2", eventTypeName)
-                                    .bind("$3", tenant)
-                                    .bind("$4", bundleName)
-                                    .execute();
+        return connectionPublisherUni.get().onItem().transformToMulti(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", applicationName)
+                    .bind("$2", eventTypeName)
+                    .bind("$3", tenant)
+                    .bind("$4", bundleName)
+                    .execute();
 
-                            return this.mapResultSetToEndpoint(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            return Multi.createFrom().publisher(this.mapResultSetToEndpoint(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<Endpoint> getEndpoints(String tenant, Query limiter) {
@@ -211,35 +199,27 @@ public class EndpointResources extends DatasourceProvider {
 
         String query = limiter.getModifiedQuery(allAccountEndpointsQuery);
         // TODO Add JOIN ON clause to proper table, such as webhooks and then read the results
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .execute();
+        return connectionPublisherUni.get().onItem().transformToMulti(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", tenant)
+                    .execute();
 
-                            return this.mapResultSetToEndpoint(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            return Multi.createFrom().publisher(this.mapResultSetToEndpoint(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Integer> getEndpointsCount(String tenant) {
         String query = basicEndpointCountQuery + " WHERE e.account_id = $1";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .execute();
-                            return execute.flatMap(r -> r.map((row, rowMetadata) -> row.get(0, Integer.class)));
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", tenant)
+                            .execute()
+                            .flatMap(r -> r.map((row, rowMetadata) -> row.get(0, Integer.class)))
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     private Flux<Endpoint> mapResultSetToEndpoint(Flux<PostgresqlResult> resultFlux) {
@@ -284,19 +264,14 @@ public class EndpointResources extends DatasourceProvider {
         String allAccountEndpointsQuery = basicEndpointGetQuery + " WHERE e.account_id = $1";
         String query = allAccountEndpointsQuery + " AND e.id = $2";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", id)
-                                    .execute();
-                            return this.mapResultSetToEndpoint(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", tenant)
+                    .bind("$2", id)
+                    .execute();
+            return Uni.createFrom().publisher(this.mapResultSetToEndpoint(execute))
+                    .eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> deleteEndpoint(String tenant, UUID id) {
@@ -349,41 +324,35 @@ public class EndpointResources extends DatasourceProvider {
     public Uni<Boolean> linkEndpoint(String tenant, UUID endpointId, UUID eventTypeId) {
         String query = "INSERT INTO public.endpoint_targets (account_id, event_type_id, endpoint_id) VALUES ($1, $2, $3)";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", eventTypeId)
-                                    .bind("$3", endpointId)
-                                    .execute();
-                            return execute.flatMap(PostgresqlResult::getRowsUpdated)
-                                    .map(i -> i > 0).next();
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", tenant)
+                            .bind("$2", eventTypeId)
+                            .bind("$3", endpointId)
+                            .execute()
+                            .flatMap(PostgresqlResult::getRowsUpdated)
+                            .map(i -> i > 0)
+                            .next()
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> unlinkEndpoint(String tenant, UUID endpointId, UUID eventTypeId) {
         String query = "DELETE FROM public.endpoint_targets WHERE account_id = $1 AND event_type_id = $2 AND endpoint_id = $3";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", eventTypeId)
-                                    .bind("$3", endpointId)
-                                    .execute();
-                            return execute.flatMap(PostgresqlResult::getRowsUpdated)
-                                    .map(i -> i > 0).next();
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", tenant)
+                            .bind("$2", eventTypeId)
+                            .bind("$3", endpointId)
+                            .execute()
+                            .flatMap(PostgresqlResult::getRowsUpdated)
+                            .map(i -> i > 0)
+                            .next()
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<Endpoint> getLinkedEndpoints(String tenant, UUID eventTypeId, Query limiter) {
@@ -393,19 +362,15 @@ public class EndpointResources extends DatasourceProvider {
 
         String query = limiter.getModifiedQuery(basicQuery);
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", eventTypeId)
-                                    .execute();
+        return connectionPublisherUni.get().onItem().transformToMulti(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", tenant)
+                    .bind("$2", eventTypeId)
+                    .execute();
 
-                            return this.mapResultSetToEndpoint(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            return Multi.createFrom().publisher(this.mapResultSetToEndpoint(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<Endpoint> getDefaultEndpoints(String tenant) {
@@ -417,55 +382,44 @@ public class EndpointResources extends DatasourceProvider {
                 basicEndpointGetQuery +
                 "JOIN default_endpoints ae ON ae.endpoint_id = e.id";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .execute();
+        return connectionPublisherUni.get().onItem().transformToMulti(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", tenant)
+                    .execute();
 
-                            return this.mapResultSetToEndpoint(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            return Multi.createFrom().publisher(this.mapResultSetToEndpoint(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> endpointInDefaults(String tenant, UUID endpointId) {
         String query = "SELECT count(endpoint_id) FROM public.endpoint_defaults WHERE account_id = $1 and endpoint_id = $2";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", endpointId)
-                                    .execute();
-
-                            return execute.flatMap(postgresqlResult -> postgresqlResult.map((row, rowMetadata) -> row.get(0, Integer.class) > 0));
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        })).toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", tenant)
+                            .bind("$2", endpointId)
+                            .execute()
+                            .flatMap(postgresqlResult -> postgresqlResult.map((row, rowMetadata) -> row.get(0, Integer.class) > 0))
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> addEndpointToDefaults(String tenant, UUID endpointId) {
         String query = "INSERT INTO public.endpoint_defaults (account_id, endpoint_id) VALUES ($1, $2)";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", endpointId)
-                                    .execute();
-                            return execute.flatMap(PostgresqlResult::getRowsUpdated)
-                                    .map(i -> i > 0).next();
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni()
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", tenant)
+                            .bind("$2", endpointId)
+                            .execute()
+                            .flatMap(PostgresqlResult::getRowsUpdated)
+                            .map(i -> i > 0)
+                            .next()
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        })
                 .onFailure()
                 .transform(t -> {
                     if (t instanceof R2dbcDataIntegrityViolationException) {
@@ -478,20 +432,17 @@ public class EndpointResources extends DatasourceProvider {
     public Uni<Boolean> deleteEndpointFromDefaults(String tenant, UUID endpointId) {
         String query = "DELETE FROM public.endpoint_defaults WHERE account_id = $1 AND endpoint_id = $2";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", endpointId)
-                                    .execute();
-                            return execute.flatMap(PostgresqlResult::getRowsUpdated)
-                                    .map(i -> i > 0).next();
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", tenant)
+                            .bind("$2", endpointId)
+                            .execute()
+                            .flatMap(PostgresqlResult::getRowsUpdated)
+                            .map(i -> i > 0)
+                            .next()
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> updateEndpoint(Endpoint endpoint) {

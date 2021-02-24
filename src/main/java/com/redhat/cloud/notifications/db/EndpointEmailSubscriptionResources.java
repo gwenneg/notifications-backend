@@ -21,96 +21,74 @@ public class EndpointEmailSubscriptionResources extends DatasourceProvider {
     public Uni<Boolean> subscribe(String accountNumber, String username, EmailSubscriptionType type) {
         String query = "INSERT INTO public.endpoint_email_subscriptions(account_id, user_id, subscription_type) VALUES($1, $2, $3) " +
                 "ON CONFLICT (account_id, user_id, subscription_type) DO NOTHING"; // The value is already on the database, this is OK
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", accountNumber)
-                                    .bind("$2", username)
-                                    .bind("$3", type.toString())
-                                    .execute();
-                            return execute.flatMap(PostgresqlResult::getRowsUpdated)
-                                    .map(i -> true).next();
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        })
-                ).toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", accountNumber)
+                            .bind("$2", username)
+                            .bind("$3", type.toString())
+                            .execute()
+                            .flatMap(PostgresqlResult::getRowsUpdated)
+                            .map(i -> true)
+                            .next()
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> unsubscribe(String accountNumber, String username, EmailSubscriptionType type) {
         String query = "DELETE FROM public.endpoint_email_subscriptions where account_id = $1 AND user_id = $2 AND subscription_type = $3";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", accountNumber)
-                                    .bind("$2", username)
-                                    .bind("$3", type.toString())
-                                    .execute();
-                            return execute.flatMap(PostgresqlResult::getRowsUpdated)
-                                    .map(i -> true).next();
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        })
-                ).toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", accountNumber)
+                            .bind("$2", username)
+                            .bind("$3", type.toString())
+                            .execute()
+                            .flatMap(PostgresqlResult::getRowsUpdated)
+                            .map(i -> true)
+                            .next()
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<EmailSubscription> getEmailSubscription(String accountNumber, String username, EmailSubscriptionType type) {
         String query = "SELECT account_id, user_id, subscription_type FROM public.endpoint_email_subscriptions where account_id = $1 AND user_id = $2 AND subscription_type = $3 LIMIT 1";
-
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute =  c2.createStatement(query)
-                                    .bind("$1", accountNumber)
-                                    .bind("$2", username)
-                                    .bind("$3", type.toString())
-                                    .execute();
-                            return this.mapResultSetToEmailSubscription(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        })
-                ).toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", accountNumber)
+                    .bind("$2", username)
+                    .bind("$3", type.toString())
+                    .execute();
+            return Uni.createFrom().publisher(this.mapResultSetToEmailSubscription(execute))
+                    .eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Integer> getEmailSubscribersCount(String accountNumber, EmailSubscriptionType type) {
         String query = "SELECT count(user_id) FROM public.endpoint_email_subscriptions where account_id = $1 AND subscription_type = $2";
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                    c2 -> {
-                        Flux<PostgresqlResult> execute =  c2.createStatement(query)
-                                .bind("$1", accountNumber)
-                                .bind("$2", type.toString())
-                                .execute();
-                        return execute.flatMap(r -> r.map((row, rowMetadata) -> row.get(0, Integer.class)));
-                    })
-                    .withFinalizer(postgresqlConnection -> {
-                        postgresqlConnection.close().subscribe();
-                    })
-        ).toUni();
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", accountNumber)
+                            .bind("$2", type.toString())
+                            .execute()
+                            .flatMap(r -> r.map((row, rowMetadata) -> row.get(0, Integer.class)))
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<EmailSubscription> getEmailSubscribers(String accountNumber, EmailSubscriptionType type) {
         String query = "SELECT account_id, user_id, subscription_type FROM public.endpoint_email_subscriptions where account_id = $1 AND subscription_type = $2";
-
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute =  c2.createStatement(query)
-                                    .bind("$1", accountNumber)
-                                    .bind("$2", type.toString())
-                                    .execute();
-                            return this.mapResultSetToEmailSubscription(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        })
-                );
+        return connectionPublisherUni.get().onItem().transformToMulti(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", accountNumber)
+                    .bind("$2", type.toString())
+                    .execute();
+            return Multi.createFrom().publisher(this.mapResultSetToEmailSubscription(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     private Flux<EmailSubscription> mapResultSetToEmailSubscription(Flux<PostgresqlResult> resultFlux) {

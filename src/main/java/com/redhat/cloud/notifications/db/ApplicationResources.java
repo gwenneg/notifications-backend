@@ -28,23 +28,21 @@ public class ApplicationResources extends AbstractGenericResource {
     public Uni<Application> createApplication(Application app) {
         String query = "INSERT INTO public.applications (name, display_name, bundle_id) VALUES ($1, $2, $3)";
         // Return filled with id
-        return connectionPublisher.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> c2.createStatement(query)
-                                .bind("$1", app.getName())
-                                .bind("$2", app.getDisplay_name())
-                                .bind("$3", app.getBundleId())
-                                .returnGeneratedValues("id", "created")
-                                .execute()
-                                .flatMap(res -> res.map((row, rowMetadata) -> {
-                                    app.setId(row.get("id", UUID.class));
-                                    app.setCreated(row.get("created", Date.class));
-                                    return app;
-                                })))
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+        return connectionPublisher.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", app.getName())
+                            .bind("$2", app.getDisplay_name())
+                            .bind("$3", app.getBundleId())
+                            .returnGeneratedValues("id", "created")
+                            .execute()
+                            .flatMap(res -> res.map((row, rowMetadata) -> {
+                                app.setId(row.get("id", UUID.class));
+                                app.setCreated(row.get("created", Date.class));
+                                return app;
+                            }))
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> deleteApplication(UUID applicationId) {
@@ -56,48 +54,40 @@ public class ApplicationResources extends AbstractGenericResource {
     public Uni<EventType> addEventTypeToApplication(UUID applicationId, EventType type) {
         String insertQuery = "INSERT INTO public.event_type (name, display_name, application_id, description) VALUES ($1, $2, $3, $4)";
 
-        return connectionPublisher.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            PostgresqlStatement bind = c2.createStatement(insertQuery)
-                                    .bind("$1", type.getName())
-                                    .bind("$2", type.getDisplay_name())
-                                    .bind("$3", applicationId)
+        return connectionPublisher.get().flatMap(connection -> {
+            PostgresqlStatement bind = connection.createStatement(insertQuery)
+                    .bind("$1", type.getName())
+                    .bind("$2", type.getDisplay_name())
+                    .bind("$3", applicationId)
 
-                                    .returnGeneratedValues("id");
+                    .returnGeneratedValues("id");
 
-                            if (type.getDescription() != null) {
-                                bind.bind("$4", type.getDescription());
-                            } else {
-                                bind.bindNull("$4", String.class);
-                            }
+            if (type.getDescription() != null) {
+                bind.bind("$4", type.getDescription());
+            } else {
+                bind.bindNull("$4", String.class);
+            }
 
-                            return bind
-                                    .execute()
-                                    .flatMap(res -> res.map((row, rowMetadata) -> {
-                                        type.setId(row.get("id", UUID.class));
-                                        return type;
-                                    }));
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+            return Uni.createFrom().publisher(
+                    bind
+                            .execute()
+                            .flatMap(res -> res.map((row, rowMetadata) -> {
+                                type.setId(row.get("id", UUID.class));
+                                return type;
+                            }))
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<Application> getApplications(String bundleName) {
-        return connectionPublisher.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(APPLICATION_QUERY_BY_BUNDLE_NAME)
-                                    .bind("$1", bundleName)
-                                    .execute();
+        return connectionPublisher.get().onItem().transformToMulti(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(APPLICATION_QUERY_BY_BUNDLE_NAME)
+                    .bind("$1", bundleName)
+                    .execute();
 
-                            return mapResultSetToApplication(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            return Multi.createFrom().publisher(mapResultSetToApplication(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     private Flux<Application> mapResultSetToApplication(Flux<PostgresqlResult> resultFlux) {
@@ -115,42 +105,33 @@ public class ApplicationResources extends AbstractGenericResource {
 
     public Uni<Application> getApplication(UUID applicationId) {
         String query = APPLICATION_QUERY + " WHERE id = $1";
-        return connectionPublisher.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", applicationId)
-                                    .execute();
-
-                            return mapResultSetToApplication(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        })).toUni();
+        return connectionPublisher.get().flatMap(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", applicationId)
+                    .execute();
+            return Uni.createFrom().publisher(mapResultSetToApplication(execute))
+                    .eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<EventType> getEventTypes(UUID applicationId) {
         String query = "SELECT et.id, et.name, et.display_name FROM public.event_type et " +
                 "WHERE et.application_id = $1";
 
-        return connectionPublisher.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", applicationId)
-                                    .execute();
-
-                            return execute.flatMap(res -> res.map((row, rowMetadata) -> {
+        return connectionPublisher.get().onItem().transformToMulti(connection -> {
+            return Multi.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", applicationId)
+                            .execute()
+                            .flatMap(res -> res.map((row, rowMetadata) -> {
                                 EventType eventType = new EventType();
                                 eventType.setId(row.get("id", UUID.class));
                                 eventType.setName(row.get("name", String.class));
                                 eventType.setDisplay_name(row.get("display_name", String.class));
                                 return eventType;
-                            }));
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+                            }))
+            ).onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Uni<Boolean> deleteEventTypeById(UUID eventTypeId) {
@@ -193,26 +174,22 @@ public class ApplicationResources extends AbstractGenericResource {
 
         final String finalBundleIdParam = bundleIdParam;
 
-        return connectionPublisher.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            PostgresqlStatement statement = c2.createStatement(query);
+        return connectionPublisher.get().onItem().transformToMulti(connection -> {
+            PostgresqlStatement statement = connection.createStatement(query);
 
-                            if (applicationId != null && applicationId.size() > 0) {
-                                statement = statement.bind("$1", applicationId.toArray(new UUID[applicationId.size()]));
-                            }
+            if (applicationId != null && applicationId.size() > 0) {
+                statement = statement.bind("$1", applicationId.toArray(new UUID[applicationId.size()]));
+            }
 
-                            if (bundleId != null) {
-                                statement = statement.bind(finalBundleIdParam, bundleId);
-                            }
+            if (bundleId != null) {
+                statement = statement.bind(finalBundleIdParam, bundleId);
+            }
 
-                            Flux<PostgresqlResult> execute = statement.execute();
+            Flux<PostgresqlResult> execute = statement.execute();
 
-                            return mapResultSetToEventTypes(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            return Multi.createFrom().publisher(mapResultSetToEventTypes(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     public Multi<EventType> getEventTypesByEndpointId(@NotNull String accountId, @NotNull UUID endpointId) {
@@ -221,19 +198,15 @@ public class ApplicationResources extends AbstractGenericResource {
                 "JOIN public.endpoint_targets endt ON  endt.event_type_id = et.id " +
                 "WHERE endt.endpoint_id = $1 AND endt.account_id = $2";
 
-        return connectionPublisher.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", endpointId)
-                                    .bind("$2", accountId)
-                                    .execute();
+        return connectionPublisher.get().onItem().transformToMulti(connection -> {
+            Flux<PostgresqlResult> execute = connection.createStatement(query)
+                    .bind("$1", endpointId)
+                    .bind("$2", accountId)
+                    .execute();
 
-                            return mapResultSetToEventTypes(execute);
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }));
+            return Multi.createFrom().publisher(mapResultSetToEventTypes(execute))
+                    .onTermination().call(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 
     private Flux<EventType> mapResultSetToEventTypes(Flux<PostgresqlResult> resultFlux) {

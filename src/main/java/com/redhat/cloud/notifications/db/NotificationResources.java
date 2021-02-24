@@ -90,23 +90,19 @@ public class NotificationResources {
         String basicQuery = "SELECT details FROM public.notification_history WHERE account_id = $1 AND endpoint_id = $2 AND id = $3";
         String query = limiter.getModifiedQuery(basicQuery);
 
-        return connectionPublisherUni.get().onItem()
-                .transformToMulti(c -> Multi.createFrom().resource(() -> c,
-                        c2 -> {
-                            Flux<PostgresqlResult> execute = c2.createStatement(query)
-                                    .bind("$1", tenant)
-                                    .bind("$2", endpoint)
-                                    .bind("$3", historyId)
-                                    .execute();
-                            return execute.flatMap(res -> res.map((row, rowMetadata) -> {
+        return connectionPublisherUni.get().flatMap(connection -> {
+            return Uni.createFrom().publisher(
+                    connection.createStatement(query)
+                            .bind("$1", tenant)
+                            .bind("$2", endpoint)
+                            .bind("$3", historyId)
+                            .execute()
+                            .flatMap(res -> res.map((row, rowMetadata) -> {
                                 String json = row.get("details", String.class);
                                 // TODO json field is not necessarily available!
                                 return new JsonObject(json);
-                            }));
-                        })
-                        .withFinalizer(postgresqlConnection -> {
-                            postgresqlConnection.close().subscribe();
-                        }))
-                .toUni();
+                            }))
+            ).eventually(() -> Uni.createFrom().publisher(connection.close()));
+        });
     }
 }
