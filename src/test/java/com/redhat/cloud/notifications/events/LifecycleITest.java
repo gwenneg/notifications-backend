@@ -10,10 +10,10 @@ import com.redhat.cloud.notifications.ingress.Action;
 import com.redhat.cloud.notifications.models.Application;
 import com.redhat.cloud.notifications.models.Bundle;
 import com.redhat.cloud.notifications.models.Endpoint;
+import com.redhat.cloud.notifications.models.EndpointType;
 import com.redhat.cloud.notifications.models.EventType;
-import com.redhat.cloud.notifications.models.NotificationHistory;
+import com.redhat.cloud.notifications.models.HttpType;
 import com.redhat.cloud.notifications.models.WebhookAttributes;
-import com.redhat.cloud.notifications.routers.models.EndpointPage;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -23,6 +23,7 @@ import io.restassured.http.ContentType;
 import io.restassured.http.Header;
 import io.restassured.response.Response;
 import io.vertx.core.json.Json;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
@@ -39,6 +40,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -57,30 +59,30 @@ import static org.mockserver.model.HttpResponse.response;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class LifecycleITest {
 
+    /*
+     * In the tests below, most JSON responses are verified using JsonObject/JsonArray instead of deserializing these responses
+     * into model instances. That's because the model classes contain attributes annotated with @JsonProperty(access = READ_ONLY)
+     * which can't be deserialized and therefore verified here.
+     */
+
     private static final String APP_NAME = "policies-lifecycle-test";
     private static final String BUNDLE_NAME = "my-bundle";
     private static final String EVENT_TYPE_NAME = "all";
+    @MockServerConfig
+    MockServerClientConfig mockServerConfig;
+    @Channel("ingress")
+    Emitter<String> ingressChan;
+    @Inject
+    EndpointResources resources;
+    @Inject
+    MeterRegistry meterRegistry;
+    JsonObject theBundle;
+    private Header identityHeader;
 
     @BeforeEach
     void beforeEach() {
         RestAssured.basePath = TestConstants.API_INTEGRATIONS_V_1_0;
     }
-
-    private Header identityHeader;
-
-    @MockServerConfig
-    MockServerClientConfig mockServerConfig;
-
-    @Channel("ingress")
-    Emitter<String> ingressChan;
-
-    @Inject
-    EndpointResources resources;
-
-    @Inject
-    MeterRegistry meterRegistry;
-
-    Bundle theBundle;
 
     @BeforeAll
     void setup() {
@@ -97,24 +99,24 @@ public class LifecycleITest {
     @Test
     void t00_setupBundle() {
         Bundle bundle = new Bundle(BUNDLE_NAME, "A bundle");
-        theBundle =
-            given()
+        Response response = given()
                 .body(bundle)
                 .contentType(ContentType.JSON)
                 .basePath("/")
-            .when()
-                    .post("/internal/bundles")
-            .then()
+                .when()
+                .post("/internal/bundles")
+                .then()
                 .statusCode(200)
-            .extract().body().as(Bundle.class);
+                .extract().response();
+        theBundle = new JsonObject(response.getBody().asString());
     }
 
     @Test
     void t01_testAdding() {
         Application app = new Application();
         app.setName(APP_NAME);
-        app.setDisplay_name("The best app in the life");
-        app.setBundleId(theBundle.getId());
+        app.setDisplayName("The best app in the life");
+        app.setBundleId(UUID.fromString(theBundle.getString("id")));
 
         Response response = given()
                 .when()
@@ -126,14 +128,14 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        Application appResponse = Json.decodeValue(response.getBody().asString(), Application.class);
-        assertNotNull(appResponse.getId());
-        assertEquals(theBundle.getId(), appResponse.getBundleId());
+        JsonObject appResponse = new JsonObject(response.getBody().asString());
+        assertNotNull(appResponse.getString("id"));
+        assertEquals(theBundle.getString("id"), appResponse.getString("bundle_id"));
 
         // Create eventType
         EventType eventType = new EventType();
         eventType.setName(EVENT_TYPE_NAME);
-        eventType.setDisplay_name("Policies will take care of the rules");
+        eventType.setDisplayName("Policies will take care of the rules");
         eventType.setDescription("Policies is super cool, you should use it");
 
         response = given()
@@ -141,24 +143,24 @@ public class LifecycleITest {
                 .contentType(ContentType.JSON)
                 .basePath("/")
                 .body(Json.encode(eventType))
-                .post(String.format("/internal/applications/%s/eventTypes", appResponse.getId()))
+                .post(String.format("/internal/applications/%s/eventTypes", appResponse.getString("id")))
                 .then()
                 .statusCode(200)
                 .extract().response();
 
-        EventType typeResponse = Json.decodeValue(response.getBody().asString(), EventType.class);
-        assertNotNull(typeResponse.getId());
-        assertEquals(eventType.getDescription(), typeResponse.getDescription());
+        JsonObject typeResponse = new JsonObject(response.getBody().asString());
+        assertNotNull(typeResponse.getString("id"));
+        assertEquals(eventType.getDescription(), typeResponse.getString("description"));
 
         // Add new endpoints
         WebhookAttributes webAttr = new WebhookAttributes();
-        webAttr.setMethod(WebhookAttributes.HttpType.POST);
+        webAttr.setMethod(HttpType.POST);
         webAttr.setDisableSSLVerification(true);
         webAttr.setSecretToken("super-secret-token");
         webAttr.setUrl(String.format("http://%s/test/lifecycle", mockServerConfig.getRunningAddress()));
 
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.WEBHOOK);
+        ep.setType(EndpointType.WEBHOOK);
         ep.setName("positive feeling");
         ep.setDescription("needle in the haystack");
         ep.setEnabled(true);
@@ -174,16 +176,16 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint endpoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(endpoint.getId());
+        JsonObject endpoint = new JsonObject(response.getBody().asString());
+        assertNotNull(endpoint.getString("id"));
 
         webAttr = new WebhookAttributes();
-        webAttr.setMethod(WebhookAttributes.HttpType.POST);
+        webAttr.setMethod(HttpType.POST);
         webAttr.setDisableSSLVerification(true);
         webAttr.setUrl(String.format("http://%s/test/lifecycle", mockServerConfig.getRunningAddress()));
 
         ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.WEBHOOK);
+        ep.setType(EndpointType.WEBHOOK);
         ep.setName("negative feeling");
         ep.setDescription("I feel like dying");
         ep.setEnabled(true);
@@ -199,18 +201,18 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint endpointFail = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(endpointFail.getId());
+        JsonObject endpointFail = new JsonObject(response.getBody().asString());
+        assertNotNull(endpointFail.getString("id"));
 
         // Link an eventType to endpoints
 
-        for (Endpoint endpointLink : List.of(endpoint, endpointFail)) {
+        for (JsonObject endpointLink : List.of(endpoint, endpointFail)) {
             given()
                     .basePath(TestConstants.API_NOTIFICATIONS_V_1_0)
                     .header(identityHeader)
                     .when()
                     .contentType(ContentType.JSON)
-                    .put(String.format("/notifications/eventTypes/%s/%s", typeResponse.getId().toString(), endpointLink.getId()))
+                    .put(String.format("/notifications/eventTypes/%s/%s", typeResponse.getString("id"), endpointLink.getString("id")))
                     .then()
                     .statusCode(200);
         }
@@ -284,36 +286,38 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint[] endpoints = Json.decodeValue(response.getBody().asString(), EndpointPage.class).getData().toArray(new Endpoint[0]);
-        assertEquals(2, endpoints.length);
+        JsonArray endpoints = new JsonObject(response.getBody().asString()).getJsonArray("data");
+        assertEquals(2, endpoints.size());
 
-        for (Endpoint ep : endpoints) {
+        for (int i = 0; i < endpoints.size(); i++) {
+            JsonObject ep = endpoints.getJsonObject(i);
             // Fetch the notification history for the endpoints
             response = given()
                     .header(identityHeader)
                     .when()
                     .contentType(ContentType.JSON)
-                    .get(String.format("/endpoints/%s/history", ep.getId().toString()))
+                    .get(String.format("/endpoints/%s/history", ep.getString("id")))
                     .then()
                     .statusCode(200)
                     .extract().response();
 
-            NotificationHistory[] histories = Json.decodeValue(response.getBody().asString(), NotificationHistory[].class);
-            assertEquals(1, histories.length);
+            JsonArray histories = new JsonArray(response.getBody().asString());
+            assertEquals(1, histories.size());
 
-            for (NotificationHistory history : histories) {
+            for (int j = 0; j < histories.size(); j++) {
+                JsonObject history = histories.getJsonObject(j);
                 // Sort first?
-                if (ep.getName().startsWith("negative")) {
+                if (ep.getString("name").startsWith("negative")) {
                     // TODO Validate that we actually reach this part
-                    assertFalse(history.isInvocationResult());
-                    WebhookAttributes attr = (WebhookAttributes) ep.getProperties();
+                    assertFalse(history.getBoolean("invocation_result"));
+                    JsonObject attr = ep.getJsonObject("properties");
 
                     // Fetch details
                     response = given()
                             .header(identityHeader)
                             .when()
                             .contentType(ContentType.JSON)
-                            .get(String.format("/endpoints/%s/history/%s/details", ep.getId().toString(), history.getId()))
+                            .get(String.format("/endpoints/%s/history/%s/details", ep.getString("id"), history.getInteger("id")))
                             .then()
                             .statusCode(200)
                             .extract().response();
@@ -321,11 +325,11 @@ public class LifecycleITest {
                     JsonObject json = new JsonObject(response.getBody().asString());
                     assertFalse(json.isEmpty());
                     assertEquals(400, json.getInteger("code").intValue());
-                    assertEquals(attr.getUrl(), json.getString("url"));
-                    assertEquals(attr.getMethod().toString(), json.getString("method"));
+                    assertEquals(attr.getString("url"), json.getString("url"));
+                    assertEquals(attr.getString("method"), json.getString("method"));
                 } else {
                     // TODO Validate that we actually reach this part
-                    assertTrue(history.isInvocationResult());
+                    assertTrue(history.getBoolean("invocation_result"));
                 }
             }
         }
@@ -343,12 +347,13 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        EventType[] typesResponse = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertTrue(typesResponse.length >= 1);
+        JsonArray typesResponse = new JsonArray(response.getBody().asString());
+        assertTrue(typesResponse.size() >= 1);
 
-        EventType policiesAll = null;
-        for (EventType eventType : typesResponse) {
-            if (eventType.getName().equals(EVENT_TYPE_NAME) && eventType.getApplication().getName().equals(APP_NAME)) {
+        JsonObject policiesAll = null;
+        for (int i = 0; i < typesResponse.size(); i++) {
+            JsonObject eventType = typesResponse.getJsonObject(i);
+            if (eventType.getString("name").equals(EVENT_TYPE_NAME) && eventType.getJsonObject("application").getString("name").equals(APP_NAME)) {
                 policiesAll = eventType;
                 break;
             }
@@ -361,25 +366,27 @@ public class LifecycleITest {
                 .basePath(TestConstants.API_NOTIFICATIONS_V_1_0)
                 // Set header to x-rh-identity
                 .header(identityHeader)
-                .when().get(String.format("/notifications/eventTypes/%s", policiesAll.getId()))
+                .when().get(String.format("/notifications/eventTypes/%s", policiesAll.getString("id")))
                 .then()
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint[] endpoints = Json.decodeValue(response.getBody().asString(), Endpoint[].class);
-        assertEquals(2, endpoints.length);
+        JsonArray endpoints = new JsonArray(response.getBody().asString());
+        assertEquals(2, endpoints.size());
 
-        for (Endpoint endpoint : endpoints) {
+        for (int i = 0; i < endpoints.size(); i++) {
+            JsonObject endpoint = endpoints.getJsonObject(i);
             String body =
-                given()
-                    .basePath(TestConstants.API_NOTIFICATIONS_V_1_0)
-                    .header(identityHeader)
-                    .when()
-                    .delete(String.format("/notifications/eventTypes/%s/%s", policiesAll.getId(), endpoint.getId()))
-                    .then()
-                    .statusCode(204)
-                    .extract().body().asString();
+                    given()
+                            .basePath(TestConstants.API_NOTIFICATIONS_V_1_0)
+                            .header(identityHeader)
+                            .when()
+                            .delete(String.format("/notifications/eventTypes/%s/%s", policiesAll.getString("id"), endpoint.getString("id")))
+                            .then()
+                            .statusCode(204)
+                            .extract().body().asString();
             assertEquals(0, body.length());
+
         }
 
         // Fetch the list again
@@ -387,20 +394,20 @@ public class LifecycleITest {
                 .basePath(TestConstants.API_NOTIFICATIONS_V_1_0)
                 // Set header to x-rh-identity
                 .header(identityHeader)
-                .when().get(String.format("/notifications/eventTypes/%s", policiesAll.getId()))
+                .when().get(String.format("/notifications/eventTypes/%s", policiesAll.getString("id")))
                 .then()
                 .statusCode(200)
                 .extract().response();
 
-        endpoints = Json.decodeValue(response.getBody().asString(), Endpoint[].class);
-        assertEquals(0, endpoints.length);
+        endpoints = new JsonArray(response.getBody().asString());
+        assertEquals(0, endpoints.size());
     }
 
     @Test
     void t05_addEmptyDefaultSettings() {
         // Create default endpoint
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.DEFAULT);
+        ep.setType(EndpointType.DEFAULT);
         ep.setName("Default endpoint");
         ep.setDescription("The ultimate fallback");
         ep.setEnabled(true);
@@ -415,8 +422,8 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint defaultEndpoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(defaultEndpoint.getId());
+        JsonObject defaultEndpoint = new JsonObject(response.getBody().asString());
+        assertNotNull(defaultEndpoint.getString("id"));
 
         // Get the eventTypeId
         response = given()
@@ -429,10 +436,11 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        EventType[] eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        EventType targetType = null;
-        for (EventType eventType : eventTypes) {
-            if (eventType.getApplication().getName().equals(APP_NAME) && eventType.getName().equals(EVENT_TYPE_NAME)) {
+        JsonArray eventTypes = new JsonArray(response.getBody().asString());
+        JsonObject targetType = null;
+        for (int i = 0; i < eventTypes.size(); i++) {
+            JsonObject eventType = eventTypes.getJsonObject(i);
+            if (eventType.getJsonObject("application").getString("name").equals(APP_NAME) && eventType.getString("name").equals(EVENT_TYPE_NAME)) {
                 targetType = eventType;
             }
         }
@@ -444,7 +452,7 @@ public class LifecycleITest {
                 .header(identityHeader)
                 .when()
                 .contentType(ContentType.JSON)
-                .put(String.format("/notifications/eventTypes/%s/%s", targetType.getId(), defaultEndpoint.getId()))
+                .put(String.format("/notifications/eventTypes/%s/%s", targetType.getString("id"), defaultEndpoint.getString("id")))
                 .then()
                 .statusCode(200);
 
@@ -480,17 +488,18 @@ public class LifecycleITest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint[] endpoints = Json.decodeValue(response.getBody().asString(), EndpointPage.class).getData().toArray(new Endpoint[0]);
-        assertEquals(3, endpoints.length);
+        JsonArray endpoints = new JsonObject(response.getBody().asString()).getJsonArray("data");
+        assertEquals(3, endpoints.size());
 
-        for (Endpoint endpoint : endpoints) {
-            if (endpoint.getType() != Endpoint.EndpointType.DEFAULT) {
+        for (int i = 0; i < endpoints.size(); i++) {
+            JsonObject endpoint = endpoints.getJsonObject(i);
+            if (endpoint.getString("type") != EndpointType.DEFAULT.name()) {
                 given()
                         .basePath(TestConstants.API_NOTIFICATIONS_V_1_0)
                         .header(identityHeader)
                         .when()
                         .contentType(ContentType.JSON)
-                        .put(String.format("/notifications/defaults/%s", endpoint.getId()))
+                        .put(String.format("/notifications/defaults/%s", endpoint.getString("id")))
                         .then()
                         .statusCode(200);
             }
@@ -504,7 +513,7 @@ public class LifecycleITest {
         given()
                 .basePath("/")
                 .when()
-                .delete("/internal/bundles/" + theBundle.getId())
+                .delete("/internal/bundles/" + theBundle.getString("id"))
                 .then()
                 .statusCode(200);
     }

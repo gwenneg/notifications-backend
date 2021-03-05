@@ -7,10 +7,10 @@ import com.redhat.cloud.notifications.db.EmailAggregationResources;
 import com.redhat.cloud.notifications.db.EndpointEmailSubscriptionResources;
 import com.redhat.cloud.notifications.db.ResourceHelpers;
 import com.redhat.cloud.notifications.ingress.Action;
-import com.redhat.cloud.notifications.models.EmailSubscription.EmailSubscriptionType;
 import com.redhat.cloud.notifications.models.EmailSubscriptionAttributes;
+import com.redhat.cloud.notifications.models.EmailSubscriptionType;
 import com.redhat.cloud.notifications.models.Endpoint;
-import com.redhat.cloud.notifications.models.Endpoint.EndpointType;
+import com.redhat.cloud.notifications.models.EndpointType;
 import com.redhat.cloud.notifications.models.Notification;
 import com.redhat.cloud.notifications.models.NotificationHistory;
 import com.redhat.cloud.notifications.processors.webhooks.WebhookTypeProcessor;
@@ -164,7 +164,7 @@ public class EmailTest {
         try {
             Uni<NotificationHistory> process = emailProcessor.process(notif);
             NotificationHistory history = process.await().indefinitely();
-            assertTrue(history.isInvocationResult());
+            assertTrue(history.getInvocationResult());
         } catch (Exception e) {
             e.printStackTrace();
             fail(e);

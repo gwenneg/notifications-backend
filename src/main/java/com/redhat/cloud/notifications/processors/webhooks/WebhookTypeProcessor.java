@@ -99,7 +99,7 @@ public class WebhookTypeProcessor implements EndpointTypeProcessor {
 
                             HttpRequestImpl<Buffer> reqImpl = (HttpRequestImpl<Buffer>) req.getDelegate();
 
-                            if (!history.isInvocationResult()) {
+                            if (!history.getInvocationResult()) {
                                 JsonObject details = new JsonObject();
                                 details.put("url", getCallUrl(reqImpl));
                                 details.put("method", reqImpl.rawMethod());
@@ -155,7 +155,7 @@ public class WebhookTypeProcessor implements EndpointTypeProcessor {
         NotificationHistory history = new NotificationHistory();
         history.setInvocationTime(invocationTime);
         history.setEndpoint(item.getEndpoint());
-        history.setTenant(item.getTenant());
+        history.setAccountId(item.getTenant());
         history.setEventId("");
         history.setInvocationResult(false);
         return history;

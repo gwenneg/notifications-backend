@@ -6,7 +6,7 @@ import com.redhat.cloud.notifications.auth.RhIdPrincipal;
 import com.redhat.cloud.notifications.db.ApplicationResources;
 import com.redhat.cloud.notifications.db.BundleResources;
 import com.redhat.cloud.notifications.db.EndpointEmailSubscriptionResources;
-import com.redhat.cloud.notifications.models.EmailSubscription.EmailSubscriptionType;
+import com.redhat.cloud.notifications.models.EmailSubscriptionType;
 import com.redhat.cloud.notifications.routers.models.SettingsValueJsonForm;
 import com.redhat.cloud.notifications.routers.models.SettingsValues;
 import com.redhat.cloud.notifications.routers.models.SettingsValues.ApplicationSettingsValue;
@@ -72,8 +72,12 @@ public class UserConfigService {
                     }
                 })));
 
+        /*
+         * (Un)subscriptions will be run sequentially because of the concatenation.
+         * This is mandatory because the Hibernate session must not be used concurrently.
+         */
         return Multi.createBy().concatenating().streams(subscriptionRequests)
-                .collectItems().asList()
+                .collect().asList()
                 .onItem().transform(subscriptionResults -> {
                     boolean allisSuccess = subscriptionResults.stream().allMatch(isTrue -> isTrue instanceof Boolean && ((Boolean) isTrue));
                     Response.ResponseBuilder builder;
@@ -115,22 +119,22 @@ public class UserConfigService {
             return bundleResources.getBundles()
                     .onItem().transformToMulti(bundle -> {
                         BundleSettingsValue bundleSettingsValue = new BundleSettingsValue();
-                        bundleSettingsValue.name = bundle.getDisplay_name();
+                        bundleSettingsValue.name = bundle.getDisplayName();
                         values.bundles.put(bundle.getName(), bundleSettingsValue);
                         return applicationResources.getApplications(bundle.getName())
                                 .onItem().transformToMulti(application -> {
                                     ApplicationSettingsValue applicationSettingsValue = new ApplicationSettingsValue();
-                                    applicationSettingsValue.name = application.getDisplay_name();
+                                    applicationSettingsValue.name = application.getDisplayName();
                                     values.bundles.get(bundle.getName()).applications.put(application.getName(), applicationSettingsValue);
                                     return Multi.createFrom().items(EmailSubscriptionType.values())
                                             .onItem().transformToMulti(emailSubscriptionType -> {
                                                 values.bundles.get(bundle.getName()).applications.get(application.getName()).notifications.put(emailSubscriptionType, false);
                                                 return Multi.createFrom().empty();
-                                            }).concatenate();
-                                }).concatenate();
-                    }).concatenate().collectItems().asList().onItem().transformToMulti(objects -> emailSubscriptionResources.getEmailSubscriptionsForUser(account, username))
+                                            }).merge();
+                                }).merge();
+                    }).concatenate().collect().asList().onItem().transformToMulti(objects -> emailSubscriptionResources.getEmailSubscriptionsForUser(account, username))
                     .onItem().transform(emailSubscription -> {
-                        values.bundles.get(emailSubscription.getBundle()).applications.get(emailSubscription.getApplication()).notifications.put(emailSubscription.getType(), true);
+                        values.bundles.get(emailSubscription.getBundleName()).applications.get(emailSubscription.getApplicationName()).notifications.put(emailSubscription.getType(), true);
                         return emailSubscription;
                     }).collectItems().asList().onItem().transform(emailSubscriptions -> values);
         });

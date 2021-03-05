@@ -8,7 +8,7 @@ import com.redhat.cloud.notifications.db.BundleResources;
 import com.redhat.cloud.notifications.db.EndpointResources;
 import com.redhat.cloud.notifications.db.Query;
 import com.redhat.cloud.notifications.models.Endpoint;
-import com.redhat.cloud.notifications.models.Endpoint.EndpointType;
+import com.redhat.cloud.notifications.models.EndpointType;
 import com.redhat.cloud.notifications.models.EventType;
 import com.redhat.cloud.notifications.routers.models.Facet;
 import io.smallrye.mutiny.Multi;
@@ -120,7 +120,7 @@ public class NotificationService {
                     })
         );
 
-        return Multi.createBy().merging().streams(directlyAffected, indirectlyAffected);
+        return Multi.createBy().concatenating().streams(directlyAffected, indirectlyAffected);
     }
 
     @PUT
@@ -186,13 +186,13 @@ public class NotificationService {
     @Path("/facets/applications")
     @Operation(summary = "Return a thin list of configured applications. This can be used to configure a filter in the UI")
     public Multi<Facet> getApplicationsFacets(@Context SecurityContext sec, @QueryParam("bundleName") String bundleName) {
-        return apps.getApplications(bundleName).onItem().transform(a -> new Facet(a.getId().toString(), a.getName(), a.getDisplay_name()));
+        return apps.getApplications(bundleName).onItem().transform(a -> new Facet(a.getId().toString(), a.getName(), a.getDisplayName()));
     }
 
     @GET
     @Path("/facets/bundles")
     @Operation(summary = "Return a thin list of configured bundles. This can be used to configure a filter in the UI")
     public Multi<Facet> getBundleFacets(@Context SecurityContext sec) {
-        return bundleResources.getBundles().onItem().transform(b -> new Facet(b.getId().toString(), b.getName(), b.getDisplay_name()));
+        return bundleResources.getBundles().onItem().transform(b -> new Facet(b.getId().toString(), b.getName(), b.getDisplayName()));
     }
 }

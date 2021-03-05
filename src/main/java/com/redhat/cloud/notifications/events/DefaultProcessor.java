@@ -29,8 +29,8 @@ public class DefaultProcessor {
 
     public Multi<Endpoint> getDefaultEndpoints(Endpoint defaultEndpoint) {
         processedItems.increment();
-        return resources.getDefaultEndpoints(defaultEndpoint.getTenant())
-                .transform().byFilteringItemsWith(Endpoint::isEnabled)
+        return resources.getDefaultEndpoints(defaultEndpoint.getAccountId())
+                .transform().byFilteringItemsWith(Endpoint::getEnabled)
                 .onItem().invoke(() -> enrichedEndpoints.increment());
     }
 }
