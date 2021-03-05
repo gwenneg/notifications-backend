@@ -125,7 +125,7 @@ public class LifecycleITest {
     void t01_testAdding() {
         Application app = new Application();
         app.setName(APP_NAME);
-        app.setDisplay_name("The best app in the life");
+        app.setDisplayName("The best app in the life");
         app.setBundleId(UUID.fromString(theBundle.getString("id")));
 
         Response response = given()
@@ -146,7 +146,7 @@ public class LifecycleITest {
         // Create eventType
         EventType eventType = new EventType();
         eventType.setName(EVENT_TYPE_NAME);
-        eventType.setDisplay_name("Policies will take care of the rules");
+        eventType.setDisplayName("Policies will take care of the rules");
         eventType.setDescription("Policies is super cool, you should use it");
 
         response = given()

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
+import javax.enterprise.context.control.ActivateRequestContext;
 import javax.inject.Inject;
 
 import java.util.List;
@@ -72,6 +73,7 @@ public class NotificationServiceTest {
     }
 
     @BeforeAll
+    @ActivateRequestContext
     void init() {
         helpers.createTestAppAndEventTypes();
     }
