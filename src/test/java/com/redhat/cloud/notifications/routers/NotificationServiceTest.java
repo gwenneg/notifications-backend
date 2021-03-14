@@ -9,6 +9,7 @@ import com.redhat.cloud.notifications.TestLifecycleManager;
 import com.redhat.cloud.notifications.db.ResourceHelpers;
 import com.redhat.cloud.notifications.models.Application;
 import com.redhat.cloud.notifications.models.Endpoint;
+import com.redhat.cloud.notifications.models.EndpointType;
 import com.redhat.cloud.notifications.models.EventType;
 import com.redhat.cloud.notifications.routers.models.Facet;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -18,6 +19,8 @@ import io.restassured.http.ContentType;
 import io.restassured.http.Header;
 import io.restassured.response.Response;
 import io.vertx.core.json.Json;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @QuarkusTestResource(TestLifecycleManager.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class NotificationServiceTest {
+
+    /*
+     * In the tests below, most JSON responses are verified using JsonObject/JsonArray instead of deserializing these responses
+     * into model instances. That's because the model classes contain attributes annotated with @JsonProperty(access = READ_ONLY)
+     * which can't be deserialized and therefore verified here.
+     */
+
     @MockServerConfig
     MockServerClientConfig mockServerConfig;
 
@@ -78,13 +88,13 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        EventType[] eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertTrue(eventTypes.length >= 200); // Depending on the test order, we might have existing application types also
+        JsonArray eventTypes = new JsonArray(response.getBody().asString());
+        assertTrue(eventTypes.size() >= 200); // Depending on the test order, we might have existing application types also
 
-        EventType policiesAll = eventTypes[0];
-        assertNotNull(policiesAll.getId());
-        assertNotNull(policiesAll.getApplication());
-        assertNotNull(policiesAll.getApplication().getId());
+        JsonObject policiesAll = eventTypes.getJsonObject(0);
+        assertNotNull(policiesAll.getString("id"));
+        assertNotNull(policiesAll.getJsonObject("application"));
+        assertNotNull(policiesAll.getJsonObject("application").getString("id"));
     }
 
     @Test
@@ -103,12 +113,13 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        EventType[] eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        for (EventType ev : eventTypes) {
-            assertEquals(myOtherTesterApplicationId, ev.getApplication().getId());
+        JsonArray eventTypes = new JsonArray(response.getBody().asString());
+        for (int i = 0; i < eventTypes.size(); i++) {
+            JsonObject ev = eventTypes.getJsonObject(i);
+            assertEquals(myOtherTesterApplicationId.toString(), ev.getJsonObject("application").getString("id"));
         }
 
-        assertTrue(eventTypes.length >= 100); // Depending on the test order, we might have existing application types also
+        assertTrue(eventTypes.size() >= 100); // Depending on the test order, we might have existing application types also
     }
 
     @Test
@@ -127,12 +138,13 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        EventType[] eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        for (EventType ev : eventTypes) {
-            assertTrue(ev.getApplication().getBundleId().equals(myBundleId));
+        JsonArray eventTypes = new JsonArray(response.getBody().asString());
+        for (int i = 0; i < eventTypes.size(); i++) {
+            JsonObject ev = eventTypes.getJsonObject(i);
+            assertTrue(ev.getJsonObject("application").getString("bundle_id").equals(myBundleId.toString()));
         }
 
-        assertTrue(eventTypes.length >= 100); // Depending on the test order, we might have existing application types also
+        assertTrue(eventTypes.size() >= 100); // Depending on the test order, we might have existing application types also
     }
 
     @Test
@@ -153,13 +165,14 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        EventType[] eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        for (EventType ev : eventTypes) {
-            assertTrue(ev.getApplication().getBundleId().equals(myBundleId));
-            assertTrue(ev.getApplication().getId().equals(myOtherTesterApplicationId));
+        JsonArray eventTypes = new JsonArray(response.getBody().asString());
+        for (int i = 0; i < eventTypes.size(); i++) {
+            JsonObject ev = eventTypes.getJsonObject(i);
+            assertTrue(ev.getJsonObject("application").getString("bundle_id").equals(myBundleId.toString()));
+            assertTrue(ev.getJsonObject("application").getString("id").equals(myOtherTesterApplicationId.toString()));
         }
 
-        assertTrue(eventTypes.length >= 100); // Depending on the test order, we might have existing application types also
+        assertTrue(eventTypes.size() >= 100); // Depending on the test order, we might have existing application types also
     }
 
     void testCreateSecuredDefaults() {
@@ -230,7 +243,7 @@ public class NotificationServiceTest {
 
         // Create default endpoint
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.DEFAULT);
+        ep.setType(EndpointType.DEFAULT);
         ep.setName("Default endpoint");
         ep.setDescription("The ultimate fallback");
         ep.setEnabled(true);
@@ -282,9 +295,9 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        EventType[] eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(1, eventTypes.length);
-        assertEquals(ev0.getId(), eventTypes[0].getId());
+        JsonArray eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(1, eventTypes.size());
+        assertEquals(ev0.getId().toString(), eventTypes.getJsonObject(0).getString("id"));
 
         response = given()
                 .header(localIdentityHeader)
@@ -295,8 +308,8 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(0, eventTypes.length);
+        eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(0, eventTypes.size());
 
         // ep1 assigned to event ev0; ep2 assigned to default; default not assigned
         this.helpers.assignEndpointToDefault(tenant, ep2);
@@ -309,9 +322,9 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(1, eventTypes.length);
-        assertEquals(ev0.getId(), eventTypes[0].getId());
+        eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(1, eventTypes.size());
+        assertEquals(ev0.getId().toString(), eventTypes.getJsonObject(0).getString("id"));
 
         response = given()
                 .header(localIdentityHeader)
@@ -322,8 +335,8 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(0, eventTypes.length);
+        eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(0, eventTypes.size());
 
         // ep1 assigned to ev0; ep2 assigned to default; default assigned to ev1
         this.helpers.assignEndpointToEventType(tenant, defaultEp, ev1.getId());
@@ -336,9 +349,9 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(1, eventTypes.length);
-        assertEquals(ev0.getId(), eventTypes[0].getId());
+        eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(1, eventTypes.size());
+        assertEquals(ev0.getId().toString(), eventTypes.getJsonObject(0).getString("id"));
 
         response = given()
                 .header(localIdentityHeader)
@@ -349,9 +362,9 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(1, eventTypes.length);
-        assertEquals(ev1.getId(), eventTypes[0].getId());
+        eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(1, eventTypes.size());
+        assertEquals(ev1.getId().toString(), eventTypes.getJsonObject(0).getString("id"));
 
         // ep1 assigned to event app[0][0]; ep2 assigned to default; default assigned to app[0][1] & app[0][0]
         this.helpers.assignEndpointToEventType(tenant, defaultEp, ev0.getId());
@@ -364,9 +377,9 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(1, eventTypes.length);
-        assertEquals(ev0.getId(), eventTypes[0].getId());
+        eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(1, eventTypes.size());
+        assertEquals(ev0.getId().toString(), eventTypes.getJsonObject(0).getString("id"));
 
         response = given()
                 .header(localIdentityHeader)
@@ -377,10 +390,10 @@ public class NotificationServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        eventTypes = Json.decodeValue(response.getBody().asString(), EventType[].class);
-        assertEquals(2, eventTypes.length);
-        assertEquals(ev0.getId(), eventTypes[1].getId());
-        assertEquals(ev1.getId(), eventTypes[0].getId());
+        eventTypes = new JsonArray(response.getBody().asString());
+        assertEquals(2, eventTypes.size());
+        assertEquals(ev0.getId().toString(), eventTypes.getJsonObject(1).getString("id"));
+        assertEquals(ev1.getId().toString(), eventTypes.getJsonObject(0).getString("id"));
     }
 
     @Test

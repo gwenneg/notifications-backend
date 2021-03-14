@@ -1,9 +1,5 @@
 package com.redhat.cloud.notifications.db;
 
-import com.redhat.cloud.notifications.db.entities.ApplicationEntity;
-import com.redhat.cloud.notifications.db.entities.BundleEntity;
-import com.redhat.cloud.notifications.db.mappers.ApplicationMapper;
-import com.redhat.cloud.notifications.db.mappers.BundleMapper;
 import com.redhat.cloud.notifications.models.Application;
 import com.redhat.cloud.notifications.models.Bundle;
 import io.smallrye.mutiny.Multi;
@@ -23,61 +19,62 @@ public class BundleResources {
     @Inject
     Mutiny.Session session;
 
-    @Inject
-    BundleMapper bundleMapper;
-
-    @Inject
-    ApplicationMapper applicationMapper;
-
     public Uni<Bundle> createBundle(Bundle bundle) {
-        // Return filled with id
-        return Uni.createFrom().item(() -> bundleMapper.dtoToEntity(bundle))
-                .flatMap(bundleEntity -> session.persist(bundleEntity)
-                        .call(() -> session.flush())
-                        .replaceWith(bundleEntity)
-                )
-                .onItem().transform(bundleMapper::entityToDto);
+        // The returned bundle will contain an ID and a creation timestamp.
+        return Uni.createFrom().item(bundle)
+                .onItem().transformToUni(session::persist)
+                .call(session::flush)
+                .replaceWith(bundle);
     }
 
     public Multi<Bundle> getBundles() {
-        String query = "FROM BundleEntity";
-        return session.createQuery(query, BundleEntity.class)
+        String query = "FROM Bundle";
+        return session.createQuery(query, Bundle.class)
                 .getResultList()
-                .onItem().transformToMulti(Multi.createFrom()::iterable)
-                .onItem().transform(bundleMapper::entityToDto);
+                .onItem().transformToMulti(Multi.createFrom()::iterable);
     }
 
-    public Uni<Bundle> getBundle(UUID bundleId) {
-        return session.find(BundleEntity.class, bundleId)
-                .onItem().ifNotNull().transform(bundleMapper::entityToDto);
+    public Uni<Bundle> getBundle(UUID id) {
+        return session.find(Bundle.class, id);
     }
 
-    public Uni<Boolean> deleteBundle(UUID bundleId) {
-        String query = "DELETE FROM BundleEntity WHERE id = :bundleId";
+    public Uni<Boolean> deleteBundle(UUID id) {
+        String query = "DELETE FROM Bundle WHERE id = :id";
         return session.createQuery(query)
-                .setParameter("bundleId", bundleId)
+                .setParameter("id", id)
                 .executeUpdate()
-                .call(() -> session.flush())
+                .call(session::flush)
                 .onItem().transform(rowCount -> rowCount > 0);
     }
 
-    public Multi<Application> getApplications(UUID bundleId) {
-        String query = "FROM ApplicationEntity WHERE bundle.id = :bundleId";
-        return session.createQuery(query, ApplicationEntity.class)
-                .setParameter("bundleId", bundleId)
+    public Multi<Application> getApplications(UUID id) {
+        String query = "FROM Application WHERE bundle.id = :id";
+        return session.createQuery(query, Application.class)
+                .setParameter("id", id)
                 .getResultList()
-                .onItem().transformToMulti(Multi.createFrom()::iterable)
-                .onItem().transform(applicationMapper::entityToDtoWithoutTimestamps);
+                .onItem().transformToMulti(Multi.createFrom()::iterable);
     }
 
     public Uni<Application> addApplicationToBundle(UUID bundleId, Application app) {
-        return Uni.createFrom().item(() -> {
-            app.setBundleId(bundleId);
-            return applicationMapper.dtoToEntity(app);
-        })
-        .flatMap(applicationEntity -> session.persist(applicationEntity)
-                .replaceWith(applicationEntity))
-        .call(() -> session.flush())
-        .onItem().transform(applicationMapper::entityToDto);
+        return Uni.createFrom().item(app)
+                .onItem().transform(a -> addBundleReference(a, bundleId))
+                .onItem().transformToUni(session::persist)
+                .call(session::flush)
+                .replaceWith(app);
+    }
+
+    /**
+     * Adds to the given {@link Application} a reference to a persistent {@link Bundle} without actually loading its
+     * state from the database. The app will remain unchanged if the given bundle identifier is null.
+     *
+     * @param app the app that will hold the bundle reference
+     * @param bundleId the persistent bundle identifier
+     * @return the same app instance, possibly modified if a bundle reference was added
+     */
+    private Application addBundleReference(Application app, UUID bundleId) {
+        if (bundleId != null && app.getBundle() == null) {
+            app.setBundle(session.getReference(Bundle.class, bundleId));
+        }
+        return app;
     }
 }

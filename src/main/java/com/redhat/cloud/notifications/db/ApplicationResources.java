@@ -1,10 +1,7 @@
 package com.redhat.cloud.notifications.db;
 
-import com.redhat.cloud.notifications.db.entities.ApplicationEntity;
-import com.redhat.cloud.notifications.db.entities.EventTypeEntity;
-import com.redhat.cloud.notifications.db.mappers.ApplicationMapper;
-import com.redhat.cloud.notifications.db.mappers.EventTypeMapper;
 import com.redhat.cloud.notifications.models.Application;
+import com.redhat.cloud.notifications.models.Bundle;
 import com.redhat.cloud.notifications.models.EventType;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -24,92 +21,78 @@ public class ApplicationResources {
     @Inject
     Mutiny.Session session;
 
-    @Inject
-    ApplicationMapper applicationMapper;
-
-    @Inject
-    EventTypeMapper eventTypeMapper;
-
     public Uni<Application> createApplication(Application app) {
-        // Return filled with id
-        return Uni.createFrom().item(() -> applicationMapper.dtoToEntity(app))
-                .flatMap(applicationEntity -> session.persist(applicationEntity)
-                        .replaceWith(applicationEntity))
-                .call(() -> session.flush())
-                .onItem().transform(applicationMapper::entityToDto);
+        // The returned app will contain an ID and a creation timestamp.
+        return Uni.createFrom().item(app)
+                .onItem().transform(this::addBundleReference)
+                .onItem().transformToUni(session::persist)
+                .call(session::flush)
+                .replaceWith(app);
     }
 
-    public Uni<Boolean> deleteApplication(UUID applicationId) {
-        String query = "DELETE FROM ApplicationEntity WHERE id = :applicationId";
+    public Uni<Boolean> deleteApplication(UUID id) {
+        String query = "DELETE FROM Application WHERE id = :id";
         return session.createQuery(query)
-                .setParameter("applicationId", applicationId)
+                .setParameter("id", id)
                 .executeUpdate()
-                .call(() -> session.flush())
+                .call(session::flush)
                 .onItem().transform(rowCount -> rowCount > 0);
     }
 
-    public Uni<EventType> addEventTypeToApplication(UUID applicationId, EventType type) {
-        // FIXME It should be possible to avoid querying the app before the event type insert
-        return session.find(ApplicationEntity.class, applicationId)
-                .onItem().transform(applicationEntity -> {
-                    EventTypeEntity eventTypeEntity = eventTypeMapper.dtoToEntity(type);
-                    eventTypeEntity.application = applicationEntity;
-                    return eventTypeEntity;
+    public Uni<EventType> addEventTypeToApplication(UUID appId, EventType eventType) {
+        return session.find(Application.class, appId)
+                .onItem().transform(app -> {
+                    eventType.setApplication(app);
+                    return eventType;
                 })
-                .flatMap(eventTypeEntity -> session.persist(eventTypeEntity)
-                        .replaceWith(eventTypeEntity)
-                )
-                .call(() -> session.flush())
-                .onItem().transform(eventTypeMapper::entityToDto);
+                .onItem().transformToUni(session::persist)
+                .call(session::flush)
+                .replaceWith(eventType);
     }
 
     public Multi<Application> getApplications(String bundleName) {
-        String query = "FROM ApplicationEntity WHERE bundle.name = :bundleName";
-        return session.createQuery(query, ApplicationEntity.class)
+        String query = "FROM Application WHERE bundle.name = :bundleName";
+        return session.createQuery(query, Application.class)
                 .setParameter("bundleName", bundleName)
                 .getResultList()
-                .onItem().transformToMulti(Multi.createFrom()::iterable)
-                .onItem().transform(applicationMapper::entityToDto);
+                .onItem().transformToMulti(Multi.createFrom()::iterable);
     }
 
-    public Uni<Application> getApplication(UUID applicationId) {
-        return session.find(ApplicationEntity.class, applicationId)
-                .onItem().ifNotNull().transform(applicationMapper::entityToDto);
+    public Uni<Application> getApplication(UUID id) {
+        return session.find(Application.class, id);
     }
 
     public Uni<Application> getApplication(String bundleName, String applicationName) {
-        String query = "FROM ApplicationEntity WHERE bundle.name = :bundleName AND name = :applicationName";
-        return session.createQuery(query, ApplicationEntity.class)
+        String query = "FROM Application WHERE bundle.name = :bundleName AND name = :applicationName";
+        return session.createQuery(query, Application.class)
                 .setParameter("bundleName", bundleName)
                 .setParameter("applicationName", applicationName)
-                .getSingleResultOrNull()
-                .onItem().ifNotNull().transform(applicationMapper::entityToDto);
+                .getSingleResultOrNull();
     }
 
-    public Multi<EventType> getEventTypes(UUID applicationId) {
-        String query = "FROM EventTypeEntity WHERE application.id = :applicationId";
-        return session.createQuery(query, EventTypeEntity.class)
-                .setParameter("applicationId", applicationId)
+    public Multi<EventType> getEventTypes(UUID appId) {
+        String query = "FROM EventType WHERE application.id = :appId";
+        return session.createQuery(query, EventType.class)
+                .setParameter("appId", appId)
                 .getResultList()
-                .onItem().transformToMulti(Multi.createFrom()::iterable)
-                .onItem().transform(eventTypeMapper::entityToDto);
+                .onItem().transformToMulti(Multi.createFrom()::iterable);
     }
 
-    public Uni<Boolean> deleteEventTypeById(UUID eventTypeId) {
-        String query = "DELETE FROM EventTypeEntity WHERE id = :eventTypeId";
+    public Uni<Boolean> deleteEventTypeById(UUID id) {
+        String query = "DELETE FROM EventType WHERE id = :id";
         return session.createQuery(query)
-                .setParameter("eventTypeId", eventTypeId)
+                .setParameter("id", id)
                 .executeUpdate()
-                .call(() -> session.flush())
+                .call(session::flush)
                 .onItem().transform(rowCount -> rowCount > 0);
     }
 
-    public Multi<EventType> getEventTypes(Query limiter, Set<UUID> applicationId, UUID bundleId) {
-        String query = "SELECT e FROM EventTypeEntity e LEFT JOIN FETCH e.application";
+    public Multi<EventType> getEventTypes(Query limiter, Set<UUID> appIds, UUID bundleId) {
+        String query = "SELECT e FROM EventType e LEFT JOIN FETCH e.application";
 
         List<String> conditions = new ArrayList<>();
-        if (applicationId != null && applicationId.size() > 0) {
-            conditions.add("e.application.id IN (:applicationId)");
+        if (appIds != null && appIds.size() > 0) {
+            conditions.add("e.application.id IN (:appIds)");
         }
         if (bundleId != null) {
             conditions.add("e.application.bundle.id = :bundleId");
@@ -122,9 +105,9 @@ public class ApplicationResources {
             query = limiter.getModifiedQuery(query);
         }
 
-        Mutiny.Query<EventTypeEntity> mutinyQuery = session.createQuery(query, EventTypeEntity.class);
-        if (applicationId != null && applicationId.size() > 0) {
-            mutinyQuery = mutinyQuery.setParameter("applicationId", applicationId);
+        Mutiny.Query<EventType> mutinyQuery = session.createQuery(query, EventType.class);
+        if (appIds != null && appIds.size() > 0) {
+            mutinyQuery = mutinyQuery.setParameter("appIds", appIds);
         }
         if (bundleId != null) {
             mutinyQuery = mutinyQuery.setParameter("bundleId", bundleId);
@@ -136,18 +119,30 @@ public class ApplicationResources {
         }
 
         return mutinyQuery.getResultList()
-                .onItem().transformToMulti(Multi.createFrom()::iterable)
-                .onItem().transform(eventTypeMapper::entityToDto);
+                .onItem().transformToMulti(Multi.createFrom()::iterable);
     }
 
     public Multi<EventType> getEventTypesByEndpointId(@NotNull String accountId, @NotNull UUID endpointId) {
-        String query = "SELECT e FROM EventTypeEntity e LEFT JOIN FETCH e.application JOIN e.targets t " +
+        String query = "SELECT e FROM EventType e LEFT JOIN FETCH e.application JOIN e.targets t " +
                 "WHERE t.id.accountId = :accountId AND t.endpoint.id = :endpointId";
-        return session.createQuery(query, EventTypeEntity.class)
+        return session.createQuery(query, EventType.class)
                 .setParameter("accountId", accountId)
                 .setParameter("endpointId", endpointId)
                 .getResultList()
-                .onItem().transformToMulti(Multi.createFrom()::iterable)
-                .onItem().transform(eventTypeMapper::entityToDto);
+                .onItem().transformToMulti(Multi.createFrom()::iterable);
+    }
+
+    /**
+     * Adds to the given {@link Application} a reference to a persistent {@link Bundle} without actually loading its
+     * state from the database. The app will remain unchanged if it does not contain a non-null bundle identifier.
+     *
+     * @param app the app that will hold the bundle reference
+     * @return the same app instance, possibly modified if a bundle reference was added
+     */
+    private Application addBundleReference(Application app) {
+        if (app.getBundleId() != null && app.getBundle() == null) {
+            app.setBundle(session.getReference(Bundle.class, app.getBundleId()));
+        }
+        return app;
     }
 }

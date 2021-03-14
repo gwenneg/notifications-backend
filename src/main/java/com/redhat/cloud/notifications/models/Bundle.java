@@ -1,51 +1,58 @@
 package com.redhat.cloud.notifications.models;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
+import javax.persistence.CascadeType;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.OneToMany;
+import javax.persistence.Table;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
-import java.time.LocalDateTime;
+import javax.validation.constraints.Size;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
 import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
+import static com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy;
 
 /**
  * A bundle is an aggregation of applications.
  */
-public class Bundle {
+@Entity
+@Table(name = "bundles")
+@JsonNaming(SnakeCaseStrategy.class)
+public class Bundle extends CreationUpdateTimestamped {
 
-    UUID id;
+    @Id
+    @GeneratedValue
+    @JsonProperty(access = READ_ONLY)
+    private UUID id;
 
     @NotNull
     @Pattern(regexp = "[a-z][a-z_0-9-]*")
-    String name;
+    @Size(max = 255)
+    private String name;
 
     @NotNull
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    String display_name;
+    @Column(name = "display_name")
+    private String displayName;
 
-    @JsonProperty(access = READ_ONLY)
-    @JsonFormat(shape = JsonFormat.Shape.STRING)
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private LocalDateTime created;
-
-    @JsonProperty(access = READ_ONLY)
-    @JsonFormat(shape = JsonFormat.Shape.STRING)
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private LocalDateTime updated;
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @OneToMany(mappedBy = "bundle", cascade = CascadeType.REMOVE)
+    @JsonIgnore
     private Set<Application> applications;
 
     public Bundle() {
     }
 
-    public Bundle(String bundleName, String display_name) {
-        this.name = bundleName;
-        this.display_name = display_name;
+    public Bundle(String name, String displayName) {
+        this.name = name;
+        this.displayName = displayName;
     }
 
     public UUID getId() {
@@ -64,28 +71,12 @@ public class Bundle {
         this.name = name;
     }
 
-    public String getDisplay_name() {
-        return display_name;
+    public String getDisplayName() {
+        return displayName;
     }
 
-    public void setDisplay_name(String display_name) {
-        this.display_name = display_name;
-    }
-
-    public LocalDateTime getCreated() {
-        return created;
-    }
-
-    public void setCreated(LocalDateTime created) {
-        this.created = created;
-    }
-
-    public LocalDateTime getUpdated() {
-        return updated;
-    }
-
-    public void setUpdated(LocalDateTime updated) {
-        this.updated = updated;
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public Set<Application> getApplications() {
@@ -94,5 +85,22 @@ public class Bundle {
 
     public void setApplications(Set<Application> applications) {
         this.applications = applications;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o instanceof Bundle) {
+            Bundle other = (Bundle) o;
+            return Objects.equals(id, other.id);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }

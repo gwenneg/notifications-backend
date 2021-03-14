@@ -8,8 +8,9 @@ import com.redhat.cloud.notifications.db.EndpointEmailSubscriptionResources;
 import com.redhat.cloud.notifications.db.EndpointResources;
 import com.redhat.cloud.notifications.db.NotificationResources;
 import com.redhat.cloud.notifications.db.Query;
-import com.redhat.cloud.notifications.models.EmailSubscription.EmailSubscriptionType;
+import com.redhat.cloud.notifications.models.EmailSubscriptionType;
 import com.redhat.cloud.notifications.models.Endpoint;
+import com.redhat.cloud.notifications.models.EndpointType;
 import com.redhat.cloud.notifications.models.NotificationHistory;
 import com.redhat.cloud.notifications.routers.models.EndpointPage;
 import com.redhat.cloud.notifications.routers.models.Meta;
@@ -88,7 +89,7 @@ public class EndpointService {
         Uni<Long> count;
 
         if (targetType != null) {
-            Endpoint.EndpointType endpointType = Endpoint.EndpointType.valueOf(targetType.toUpperCase());
+            EndpointType endpointType = EndpointType.valueOf(targetType.toUpperCase());
             endpoints = resources
                     .getEndpointsPerType(principal.getAccount(), endpointType, activeOnly, query);
             count = resources.getEndpointsCountPerType(principal.getAccount(), endpointType, activeOnly);
@@ -106,13 +107,13 @@ public class EndpointService {
     @RolesAllowed(RbacIdentityProvider.RBAC_WRITE_INTEGRATIONS_ENDPOINTS)
     public Uni<Endpoint> createEndpoint(@Context SecurityContext sec, @NotNull @Valid Endpoint endpoint) {
         RhIdPrincipal principal = (RhIdPrincipal) sec.getUserPrincipal();
-        endpoint.setTenant(principal.getAccount());
+        endpoint.setAccountId(principal.getAccount());
 
-        if (endpoint.getType() != Endpoint.EndpointType.DEFAULT && endpoint.getProperties() == null) {
+        if (endpoint.getType() != EndpointType.DEFAULT && endpoint.getProperties() == null) {
             throw new BadRequestException("Properties is required");
-        } else if (endpoint.getType() == Endpoint.EndpointType.DEFAULT) {
+        } else if (endpoint.getType() == EndpointType.DEFAULT) {
             // Only a single default endpoint is allowed
-            return resources.getEndpointsPerType(principal.getAccount(), Endpoint.EndpointType.DEFAULT, null, null)
+            return resources.getEndpointsPerType(principal.getAccount(), EndpointType.DEFAULT, null, null)
                     .toUni()
                     .onItem()
                     .ifNull()
@@ -168,7 +169,7 @@ public class EndpointService {
     @APIResponse(responseCode = "200", content = @Content(schema = @Schema(type = SchemaType.STRING)))
     public Uni<Response> updateEndpoint(@Context SecurityContext sec, @PathParam("id") UUID id, @NotNull @Valid Endpoint endpoint) {
         RhIdPrincipal principal = (RhIdPrincipal) sec.getUserPrincipal();
-        endpoint.setTenant(principal.getAccount());
+        endpoint.setAccountId(principal.getAccount());
         endpoint.setId(id);
         return resources.updateEndpoint(endpoint)
                 .onItem().transform(ignored -> Response.ok().build());

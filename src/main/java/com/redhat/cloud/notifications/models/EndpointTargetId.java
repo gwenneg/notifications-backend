@@ -1,21 +1,26 @@
-package com.redhat.cloud.notifications.db.entities;
+package com.redhat.cloud.notifications.models;
 
 import javax.persistence.Column;
 import javax.persistence.Embeddable;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.UUID;
 
 @Embeddable
-public class EndpointDefaultEntityId implements Serializable {
+public class EndpointTargetId implements Serializable {
 
     @Column(name = "endpoint_id")
     @NotNull
     public UUID endpointId;
 
+    @Column(name = "event_type_id")
+    public UUID eventTypeId;
+
     @Column(name = "account_id")
     @NotNull
+    @Size(max = 50)
     public String accountId;
 
     @Override
@@ -23,9 +28,10 @@ public class EndpointDefaultEntityId implements Serializable {
         if (this == o) {
             return true;
         }
-        if (o instanceof EndpointDefaultEntityId) {
-            EndpointDefaultEntityId other = (EndpointDefaultEntityId) o;
+        if (o instanceof EndpointTargetId) {
+            EndpointTargetId other = (EndpointTargetId) o;
             return Objects.equals(endpointId, other.endpointId) &&
+                    Objects.equals(eventTypeId, other.eventTypeId) &&
                     Objects.equals(accountId, other.accountId);
         }
         return false;
@@ -33,6 +39,6 @@ public class EndpointDefaultEntityId implements Serializable {
 
     @Override
     public int hashCode() {
-        return Objects.hash(endpointId, accountId);
+        return Objects.hash(endpointId, eventTypeId, accountId);
     }
 }

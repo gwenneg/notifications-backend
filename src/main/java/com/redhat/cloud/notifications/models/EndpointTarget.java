@@ -1,4 +1,4 @@
-package com.redhat.cloud.notifications.db.entities;
+package com.redhat.cloud.notifications.models;
 
 import javax.persistence.EmbeddedId;
 import javax.persistence.Entity;
@@ -10,26 +10,26 @@ import java.util.Objects;
 
 @Entity
 @Table(name = "endpoint_targets")
-public class EndpointTargetEntity {
+public class EndpointTarget {
 
     @EmbeddedId
-    public EndpointTargetEntityId id;
+    private EndpointTargetId id;
 
     @ManyToOne
     @MapsId("endpointId")
     @JoinColumn(name = "endpoint_id")
-    public EndpointEntity endpoint;
+    private Endpoint endpoint;
 
     @ManyToOne
     @MapsId("eventTypeId")
     @JoinColumn(name = "event_type_id")
-    public EventTypeEntity eventType;
+    private EventType eventType;
 
-    public EndpointTargetEntity() {
+    public EndpointTarget() {
     }
 
-    public EndpointTargetEntity(String accountId, EndpointEntity endpoint, EventTypeEntity eventType) {
-        id = new EndpointTargetEntityId();
+    public EndpointTarget(String accountId, Endpoint endpoint, EventType eventType) {
+        id = new EndpointTargetId();
         id.accountId = accountId;
         this.endpoint = endpoint;
         this.eventType = eventType;
@@ -40,8 +40,8 @@ public class EndpointTargetEntity {
         if (this == o) {
             return true;
         }
-        if (o instanceof EndpointTargetEntity) {
-            EndpointTargetEntity other = (EndpointTargetEntity) o;
+        if (o instanceof EndpointTarget) {
+            EndpointTarget other = (EndpointTarget) o;
             return Objects.equals(id, other.id);
         }
         return false;

@@ -6,10 +6,12 @@ import com.redhat.cloud.notifications.TestConstants;
 import com.redhat.cloud.notifications.TestHelpers;
 import com.redhat.cloud.notifications.TestLifecycleManager;
 import com.redhat.cloud.notifications.db.ResourceHelpers;
-import com.redhat.cloud.notifications.models.EmailSubscription.EmailSubscriptionType;
+import com.redhat.cloud.notifications.models.BasicAuthentication;
 import com.redhat.cloud.notifications.models.EmailSubscriptionAttributes;
+import com.redhat.cloud.notifications.models.EmailSubscriptionType;
 import com.redhat.cloud.notifications.models.Endpoint;
-import com.redhat.cloud.notifications.models.Endpoint.EndpointType;
+import com.redhat.cloud.notifications.models.EndpointType;
+import com.redhat.cloud.notifications.models.HttpType;
 import com.redhat.cloud.notifications.models.WebhookAttributes;
 import com.redhat.cloud.notifications.routers.models.EndpointPage;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -19,12 +21,12 @@ import io.restassured.http.ContentType;
 import io.restassured.http.Header;
 import io.restassured.response.Response;
 import io.vertx.core.json.Json;
+import io.vertx.core.json.JsonObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.inject.Inject;
 import java.util.List;
-import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -39,16 +41,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @QuarkusTestResource(TestLifecycleManager.class)
 public class EndpointServiceTest {
 
+    @MockServerConfig
+    MockServerClientConfig mockServerConfig;
+    @Inject
+    ResourceHelpers helpers;
+
     @BeforeEach
     void beforeEach() {
         RestAssured.basePath = TestConstants.API_INTEGRATIONS_V_1_0;
     }
-
-    @MockServerConfig
-    MockServerClientConfig mockServerConfig;
-
-    @Inject
-    ResourceHelpers helpers;
 
     @Test
     void testEndpointAdding() {
@@ -70,13 +71,13 @@ public class EndpointServiceTest {
 
         // Add new endpoints
         WebhookAttributes webAttr = new WebhookAttributes();
-        webAttr.setMethod(WebhookAttributes.HttpType.POST);
+        webAttr.setMethod(HttpType.POST);
         webAttr.setDisableSSLVerification(false);
         webAttr.setSecretToken("my-super-secret-token");
         webAttr.setUrl(String.format("https://%s", mockServerConfig.getRunningAddress()));
 
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.WEBHOOK);
+        ep.setType(EndpointType.WEBHOOK);
         ep.setName("endpoint to find");
         ep.setDescription("needle in the haystack");
         ep.setEnabled(true);
@@ -92,8 +93,8 @@ public class EndpointServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint responsePoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(responsePoint.getId());
+        JsonObject responsePoint = new JsonObject(response.getBody().asString());
+        assertNotNull(responsePoint.getString("id"));
 
         // Fetch the list
         response = given()
@@ -109,50 +110,50 @@ public class EndpointServiceTest {
         assertEquals(1, endpoints.size());
 
         // Fetch single endpoint also and verify
-        Endpoint responsePointSingle = fetchSingle(responsePoint.getId(), identityHeader);
-        assertNotNull(responsePoint.getProperties());
-        assertTrue(responsePointSingle.isEnabled());
+        JsonObject responsePointSingle = fetchSingle(responsePoint.getString("id"), identityHeader);
+        assertNotNull(responsePoint.getJsonObject("properties"));
+        assertTrue(responsePointSingle.getBoolean("enabled"));
 
         // Disable and fetch
         String body =
-            given()
-                .header(identityHeader)
-                .when().delete("/endpoints/" + responsePoint.getId() + "/enable")
-                .then()
-                .statusCode(204)
-                .extract().body().asString();
+                given()
+                        .header(identityHeader)
+                        .when().delete("/endpoints/" + responsePoint.getString("id") + "/enable")
+                        .then()
+                        .statusCode(204)
+                        .extract().body().asString();
         assertEquals(0, body.length());
 
-        responsePointSingle = fetchSingle(responsePoint.getId(), identityHeader);
-        assertNotNull(responsePoint.getProperties());
-        assertFalse(responsePointSingle.isEnabled());
+        responsePointSingle = fetchSingle(responsePoint.getString("id"), identityHeader);
+        assertNotNull(responsePoint.getJsonObject("properties"));
+        assertFalse(responsePointSingle.getBoolean("enabled"));
 
         // Enable and fetch
         given()
                 .header(identityHeader)
-                .when().put("/endpoints/" + responsePoint.getId() + "/enable")
+                .when().put("/endpoints/" + responsePoint.getString("id") + "/enable")
                 .then()
                 .statusCode(200);
 
-        responsePointSingle = fetchSingle(responsePoint.getId(), identityHeader);
-        assertNotNull(responsePoint.getProperties());
-        assertTrue(responsePointSingle.isEnabled());
+        responsePointSingle = fetchSingle(responsePoint.getString("id"), identityHeader);
+        assertNotNull(responsePoint.getJsonObject("properties"));
+        assertTrue(responsePointSingle.getBoolean("enabled"));
 
         // Delete
         body =
-            given()
-                .header(identityHeader)
-                .when().delete("/endpoints/" + responsePoint.getId())
-                .then()
-                .statusCode(204)
-                .extract().body().asString();
+                given()
+                        .header(identityHeader)
+                        .when().delete("/endpoints/" + responsePoint.getString("id"))
+                        .then()
+                        .statusCode(204)
+                        .extract().body().asString();
         assertEquals(0, body.length());
 
         // Fetch single
         given()
                 // Set header to x-rh-identity
                 .header(identityHeader)
-                .when().get("/endpoints/" + responsePoint.getId())
+                .when().get("/endpoints/" + responsePoint.getString("id"))
                 .then()
                 .statusCode(404);
 
@@ -166,17 +167,17 @@ public class EndpointServiceTest {
                 .body(is("{\"data\":[],\"links\":{},\"meta\":{\"count\":0}}"));
     }
 
-    private Endpoint fetchSingle(UUID id, Header identityHeader) {
+    private JsonObject fetchSingle(String id, Header identityHeader) {
         Response response = given()
                 // Set header to x-rh-identity
                 .header(identityHeader)
                 .when().get("/endpoints/" + id)
                 .then()
                 .statusCode(200)
-                .body("id", equalTo(id.toString()))
+                .body("id", equalTo(id))
                 .extract().response();
 
-        return Json.decodeValue(response.getBody().asString(), Endpoint.class);
+        return new JsonObject(response.getBody().asString());
     }
 
     @Test
@@ -190,7 +191,7 @@ public class EndpointServiceTest {
 
         // Add new endpoint without properties
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.WEBHOOK);
+        ep.setType(EndpointType.WEBHOOK);
         ep.setName("endpoint with missing properties");
         ep.setDescription("Destined to fail");
         ep.setEnabled(true);
@@ -205,7 +206,7 @@ public class EndpointServiceTest {
                 .statusCode(400);
 
         WebhookAttributes webAttr = new WebhookAttributes();
-        webAttr.setMethod(WebhookAttributes.HttpType.POST);
+        webAttr.setMethod(HttpType.POST);
         webAttr.setDisableSSLVerification(false);
         webAttr.setSecretToken("my-super-secret-token");
         webAttr.setUrl(String.format("https://%s", mockServerConfig.getRunningAddress()));
@@ -224,7 +225,7 @@ public class EndpointServiceTest {
                 .statusCode(400);
 
         // Test with incorrect webhook properties
-        ep.setType(Endpoint.EndpointType.WEBHOOK);
+        ep.setType(EndpointType.WEBHOOK);
         ep.setName("endpoint with incorrect webhook properties");
         webAttr.setMethod(null);
 
@@ -238,7 +239,7 @@ public class EndpointServiceTest {
                 .statusCode(400);
 
         // Type and attributes don't match
-        webAttr.setMethod(WebhookAttributes.HttpType.POST);
+        webAttr.setMethod(HttpType.POST);
         ep.setType(EndpointType.EMAIL_SUBSCRIPTION);
 
         // FIXME Find a way to run the test below successfully.
@@ -285,13 +286,13 @@ public class EndpointServiceTest {
 
         // Add new endpoints
         WebhookAttributes webAttr = new WebhookAttributes();
-        webAttr.setMethod(WebhookAttributes.HttpType.POST);
+        webAttr.setMethod(HttpType.POST);
         webAttr.setDisableSSLVerification(false);
         webAttr.setSecretToken("my-super-secret-token");
         webAttr.setUrl(String.format("https://%s", mockServerConfig.getRunningAddress()));
 
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.WEBHOOK);
+        ep.setType(EndpointType.WEBHOOK);
         ep.setName("endpoint to find");
         ep.setDescription("needle in the haystack");
         ep.setEnabled(true);
@@ -307,8 +308,8 @@ public class EndpointServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint responsePoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(responsePoint.getId());
+        JsonObject responsePoint = new JsonObject(response.getBody().asString());
+        assertNotNull(responsePoint.getString("id"));
 
         // Fetch the list
         response = given()
@@ -325,21 +326,21 @@ public class EndpointServiceTest {
         assertEquals(1, endpoints.size());
 
         // Fetch single endpoint also and verify
-        Endpoint responsePointSingle = fetchSingle(responsePoint.getId(), identityHeader);
-        assertNotNull(responsePoint.getProperties());
-        assertTrue(responsePointSingle.isEnabled());
+        JsonObject responsePointSingle = fetchSingle(responsePoint.getString("id"), identityHeader);
+        assertNotNull(responsePoint.getJsonObject("properties"));
+        assertTrue(responsePointSingle.getBoolean("enabled"));
 
         // Update the endpoint
-        responsePointSingle.setName("endpoint found");
-        WebhookAttributes attrSingle = (WebhookAttributes) responsePointSingle.getProperties();
-        attrSingle.setSecretToken("not-so-secret-anymore");
+        responsePointSingle.put("name", "endpoint found");
+        JsonObject attrSingle = responsePointSingle.getJsonObject("properties");
+        attrSingle.put("secret_token", "not-so-secret-anymore");
 
         // Update without payload
         given()
                 .header(identityHeader)
                 .contentType(ContentType.JSON)
                 .when()
-                .put(String.format("/endpoints/%s", responsePointSingle.getId()))
+                .put(String.format("/endpoints/%s", responsePointSingle.getString("id")))
                 .then()
                 .statusCode(400);
 
@@ -349,15 +350,15 @@ public class EndpointServiceTest {
                 .contentType(ContentType.JSON)
                 .when()
                 .body(Json.encode(responsePointSingle))
-                .put(String.format("/endpoints/%s", responsePointSingle.getId()))
+                .put(String.format("/endpoints/%s", responsePointSingle.getString("id")))
                 .then()
                 .statusCode(200);
 
         // Fetch single one again to see that the updates were done
-        Endpoint updatedEndpoint = fetchSingle(responsePointSingle.getId(), identityHeader);
-        WebhookAttributes attrSingleUpdated = (WebhookAttributes) updatedEndpoint.getProperties();
-        assertEquals("endpoint found", updatedEndpoint.getName());
-        assertEquals("not-so-secret-anymore", attrSingleUpdated.getSecretToken());
+        JsonObject updatedEndpoint = fetchSingle(responsePointSingle.getString("id"), identityHeader);
+        JsonObject attrSingleUpdated = updatedEndpoint.getJsonObject("properties");
+        assertEquals("endpoint found", updatedEndpoint.getString("name"));
+        assertEquals("not-so-secret-anymore", attrSingleUpdated.getString("secret_token"));
     }
 
     @Test
@@ -372,13 +373,13 @@ public class EndpointServiceTest {
         for (int i = 0; i < 29; i++) {
             // Add new endpoints
             WebhookAttributes webAttr = new WebhookAttributes();
-            webAttr.setMethod(WebhookAttributes.HttpType.POST);
+            webAttr.setMethod(HttpType.POST);
             webAttr.setDisableSSLVerification(false);
             webAttr.setSecretToken("my-super-secret-token");
             webAttr.setUrl(String.format("https://%s/%d", mockServerConfig.getRunningAddress(), i));
 
             Endpoint ep = new Endpoint();
-            ep.setType(Endpoint.EndpointType.WEBHOOK);
+            ep.setType(EndpointType.WEBHOOK);
             ep.setName(String.format("Endpoint %d", i));
             ep.setDescription("Try to find me!");
             ep.setEnabled(true);
@@ -394,8 +395,8 @@ public class EndpointServiceTest {
                     .statusCode(200)
                     .extract().response();
 
-            Endpoint responsePoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-            assertNotNull(responsePoint.getId());
+            JsonObject responsePoint = new JsonObject(response.getBody().asString());
+            assertNotNull(responsePoint.getString("id"));
         }
 
         // Fetch the list, page 1
@@ -441,7 +442,7 @@ public class EndpointServiceTest {
         mockServerConfig.addMockRbacAccess(identityHeaderValue, MockServerClientConfig.RbacAccess.FULL_ACCESS);
 
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.DEFAULT);
+        ep.setType(EndpointType.DEFAULT);
         ep.setName("Default endpoint");
         ep.setDescription("The ultimate fallback");
         ep.setEnabled(true);
@@ -456,12 +457,12 @@ public class EndpointServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint responsePoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(responsePoint.getId());
+        JsonObject responsePoint = new JsonObject(response.getBody().asString());
+        assertNotNull(responsePoint.getString("id"));
 
-        Endpoint responsePointSingle = fetchSingle(responsePoint.getId(), identityHeader);
-        assertEquals(responsePoint.getId(), responsePointSingle.getId());
-        assertEquals(responsePoint.getType(), responsePointSingle.getType());
+        JsonObject responsePointSingle = fetchSingle(responsePoint.getString("id"), identityHeader);
+        assertEquals(responsePoint.getString("id"), responsePointSingle.getString("id"));
+        assertEquals(responsePoint.getString("type"), responsePointSingle.getString("type"));
 
         // Fetch the default endpoint
         response = given()
@@ -474,20 +475,20 @@ public class EndpointServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        EndpointPage endpointPage = Json.decodeValue(response.getBody().asString(), EndpointPage.class);
-        assertEquals(1, endpointPage.getData().size());
-        assertEquals(1, endpointPage.getMeta().getCount());
-        assertEquals(responsePoint.getId(), endpointPage.getData().get(0).getId());
-        assertEquals(Endpoint.EndpointType.DEFAULT, responsePoint.getType());
+        JsonObject endpointPage = new JsonObject(response.getBody().asString());
+        assertEquals(1, endpointPage.getJsonArray("data").size());
+        assertEquals(1, endpointPage.getJsonObject("meta").getLong("count"));
+        assertEquals(responsePoint.getString("id"), endpointPage.getJsonArray("data").getJsonObject(0).getString("id"));
+        assertEquals(EndpointType.DEFAULT.name().toLowerCase(), responsePoint.getString("type"));
 
         // Add another type as well
         Endpoint another = new Endpoint();
-        another.setType(Endpoint.EndpointType.WEBHOOK);
+        another.setType(EndpointType.WEBHOOK);
         another.setDescription("desc");
         another.setName("name");
 
         WebhookAttributes attr = new WebhookAttributes();
-        attr.setMethod(WebhookAttributes.HttpType.POST);
+        attr.setMethod(HttpType.POST);
         attr.setUrl("http://localhost");
 
         another.setProperties(attr);
@@ -522,10 +523,10 @@ public class EndpointServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        endpointPage = Json.decodeValue(response.getBody().asString(), EndpointPage.class);
-        assertEquals(1, endpointPage.getData().size());
-        assertEquals(responsePoint.getId(), endpointPage.getData().get(0).getId());
-        assertEquals(Endpoint.EndpointType.DEFAULT, responsePoint.getType());
+        endpointPage = new JsonObject(response.getBody().asString());
+        assertEquals(1, endpointPage.getJsonArray("data").size());
+        assertEquals(responsePoint.getString("id"), endpointPage.getJsonArray("data").getJsonObject(0).getString("id"));
+        assertEquals(EndpointType.DEFAULT.name().toLowerCase(), responsePoint.getString("type"));
     }
 
     @Test
@@ -567,10 +568,10 @@ public class EndpointServiceTest {
 
         endpointPage = Json.decodeValue(response.getBody().asString(), EndpointPage.class);
         endpoints = endpointPage.getData().toArray(new Endpoint[0]);
-        assertFalse(endpoints[0].isEnabled());
-        assertFalse(endpoints[disableCount - 1].isEnabled());
-        assertTrue(endpoints[disableCount].isEnabled());
-        assertTrue(endpoints[stats[0] - 1].isEnabled());
+        assertFalse(endpoints[0].getEnabled());
+        assertFalse(endpoints[disableCount - 1].getEnabled());
+        assertTrue(endpoints[disableCount].getEnabled());
+        assertTrue(endpoints[stats[0] - 1].getEnabled());
 
         response = given()
                 .header(identityHeader)
@@ -603,14 +604,14 @@ public class EndpointServiceTest {
 
         // Add new endpoints
         WebhookAttributes webAttr = new WebhookAttributes();
-        webAttr.setMethod(WebhookAttributes.HttpType.POST);
+        webAttr.setMethod(HttpType.POST);
         webAttr.setDisableSSLVerification(false);
         webAttr.setSecretToken("my-super-secret-token");
-        webAttr.setBasicAuthentication(new WebhookAttributes.BasicAuthentication("myuser", "mypassword"));
+        webAttr.setBasicAuthentication(new BasicAuthentication("myuser", "mypassword"));
         webAttr.setUrl(String.format("https://%s", mockServerConfig.getRunningAddress()));
 
         Endpoint ep = new Endpoint();
-        ep.setType(Endpoint.EndpointType.WEBHOOK);
+        ep.setType(EndpointType.WEBHOOK);
         ep.setName("endpoint to find");
         ep.setDescription("needle in the haystack");
         ep.setEnabled(true);
@@ -626,20 +627,20 @@ public class EndpointServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint responsePoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(responsePoint.getId());
+        JsonObject responsePoint = new JsonObject(response.getBody().asString());
+        assertNotNull(responsePoint.getString("id"));
 
         // Fetch single endpoint also and verify
-        Endpoint responsePointSingle = fetchSingle(responsePoint.getId(), identityHeader);
+        JsonObject responsePointSingle = fetchSingle(responsePoint.getString("id"), identityHeader);
 
-        assertNotNull(responsePoint.getProperties());
-        assertTrue(responsePointSingle.isEnabled());
-        assertNotNull(responsePointSingle.getProperties());
-        assertTrue(responsePointSingle.getProperties() instanceof WebhookAttributes);
+        assertNotNull(responsePoint.getJsonObject("properties"));
+        assertTrue(responsePointSingle.getBoolean("enabled"));
+        assertNotNull(responsePointSingle.getJsonObject("properties"));
+        assertNotNull(responsePointSingle.getJsonObject("properties").getString("secret_token"));
 
-        WebhookAttributes attr = (WebhookAttributes) responsePointSingle.getProperties();
-        assertNotNull(attr.getBasicAuthentication());
-        assertEquals("mypassword", attr.getBasicAuthentication().getPassword());
+        JsonObject attr = responsePointSingle.getJsonObject("properties");
+        assertNotNull(attr.getJsonObject("basic_authentication"));
+        assertEquals("mypassword", attr.getJsonObject("basic_authentication").getString("password"));
     }
 
     @Test
@@ -671,17 +672,17 @@ public class EndpointServiceTest {
                 .statusCode(200)
                 .extract().response();
 
-        Endpoint responsePoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-        assertNotNull(responsePoint.getId());
+        JsonObject responsePoint = new JsonObject(response.getBody().asString());
+        assertNotNull(responsePoint.getString("id"));
 
         // Delete
         String body =
-            given()
-                .header(identityHeader)
-                .when().delete("/endpoints/" + responsePoint.getId())
-                .then()
-                .statusCode(204)
-                .extract().body().asString();
+                given()
+                        .header(identityHeader)
+                        .when().delete("/endpoints/" + responsePoint.getString("id"))
+                        .then()
+                        .statusCode(204)
+                        .extract().body().asString();
         assertEquals(0, body.length());
     }
 
@@ -706,7 +707,7 @@ public class EndpointServiceTest {
                 .header(identityHeader)
                 .when()
                 .contentType(ContentType.JSON)
-                .delete("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME  + "/policies/instant")
+                .delete("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME + "/policies/instant")
                 .then().statusCode(404);
         given()
                 .header(identityHeader)
@@ -718,7 +719,7 @@ public class EndpointServiceTest {
                 .header(identityHeader)
                 .when()
                 .contentType(ContentType.JSON)
-                .put("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME  + "/policies/instant")
+                .put("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME + "/policies/instant")
                 .then().statusCode(404);
 
         // Unknown bundle/apps give 404
@@ -748,7 +749,7 @@ public class EndpointServiceTest {
                 .header(identityHeader)
                 .when()
                 .contentType(ContentType.JSON)
-                .delete("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME  + "/" + ResourceHelpers.TEST_APP_NAME + "/instant")
+                .delete("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME + "/" + ResourceHelpers.TEST_APP_NAME + "/instant")
                 .then().statusCode(200);
         given()
                 .header(identityHeader)
@@ -760,7 +761,7 @@ public class EndpointServiceTest {
                 .header(identityHeader)
                 .when()
                 .contentType(ContentType.JSON)
-                .delete("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME  + "/" + ResourceHelpers.TEST_APP_NAME + "/daily")
+                .delete("/endpoints/email/subscription/" + ResourceHelpers.TEST_BUNDLE_NAME + "/" + ResourceHelpers.TEST_APP_NAME + "/daily")
                 .then().statusCode(200);
 
         assertNull(this.helpers.getSubscription(tenant, username, "insights", "policies", EmailSubscriptionType.INSTANT));
@@ -855,13 +856,13 @@ public class EndpointServiceTest {
         for (int i = 0; i < 200; i++) {
             // Add new endpoints
             WebhookAttributes webAttr = new WebhookAttributes();
-            webAttr.setMethod(WebhookAttributes.HttpType.POST);
+            webAttr.setMethod(HttpType.POST);
             webAttr.setDisableSSLVerification(false);
             webAttr.setSecretToken("my-super-secret-token");
             webAttr.setUrl(String.format("https://%s", mockServerConfig.getRunningAddress()));
 
             Endpoint ep = new Endpoint();
-            ep.setType(Endpoint.EndpointType.WEBHOOK);
+            ep.setType(EndpointType.WEBHOOK);
             ep.setName("endpoint to find" + i);
             ep.setDescription("needle in the haystack" + i);
             ep.setEnabled(true);
@@ -877,8 +878,8 @@ public class EndpointServiceTest {
                     .statusCode(200)
                     .extract().response();
 
-            Endpoint responsePoint = Json.decodeValue(response.getBody().asString(), Endpoint.class);
-            assertNotNull(responsePoint.getId());
+            JsonObject responsePoint = new JsonObject(response.getBody().asString());
+            assertNotNull(responsePoint.getString("id"));
 
             // Fetch the list
             given()

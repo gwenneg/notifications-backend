@@ -6,11 +6,11 @@ import com.redhat.cloud.notifications.TestLifecycleManager;
 import com.redhat.cloud.notifications.db.ResourceHelpers;
 import com.redhat.cloud.notifications.ingress.Action;
 import com.redhat.cloud.notifications.models.Endpoint;
-import com.redhat.cloud.notifications.models.Endpoint.EndpointType;
+import com.redhat.cloud.notifications.models.EndpointType;
+import com.redhat.cloud.notifications.models.HttpType;
 import com.redhat.cloud.notifications.models.Notification;
 import com.redhat.cloud.notifications.models.NotificationHistory;
 import com.redhat.cloud.notifications.models.WebhookAttributes;
-import com.redhat.cloud.notifications.models.WebhookAttributes.HttpType;
 import com.redhat.cloud.notifications.processors.webhooks.WebhookTypeProcessor;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -99,7 +99,7 @@ public class WebhookTest {
         try {
             Uni<NotificationHistory> process = webhookTypeProcessor.process(notif);
             NotificationHistory history = process.await().indefinitely();
-            assertTrue(history.isInvocationResult());
+            assertTrue(history.getInvocationResult());
         } catch (Exception e) {
             e.printStackTrace();
             fail(e);

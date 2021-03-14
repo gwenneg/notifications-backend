@@ -1,6 +1,9 @@
-package com.redhat.cloud.notifications.db.entities;
+package com.redhat.cloud.notifications.models;
+
+import com.redhat.cloud.notifications.db.converters.EmailSubscriptionTypeConverter;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Embeddable;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
@@ -8,7 +11,7 @@ import java.io.Serializable;
 import java.util.Objects;
 
 @Embeddable
-public class EndpointEmailSubscriptionEntityId implements Serializable {
+public class EmailSubscriptionId implements Serializable {
 
     @Column(name = "account_id")
     @NotNull
@@ -20,11 +23,6 @@ public class EndpointEmailSubscriptionEntityId implements Serializable {
     @Size(max = 50)
     public String userId;
 
-    @Column(name = "subscription_type")
-    @NotNull
-    @Size(max = 50)
-    public String subscriptionType;
-
     @Column(name = "bundle")
     @NotNull
     @Size(max = 255)
@@ -35,13 +33,19 @@ public class EndpointEmailSubscriptionEntityId implements Serializable {
     @Size(max = 255)
     public String applicationName;
 
+    @Column(name = "subscription_type")
+    @NotNull
+    @Size(max = 50)
+    @Convert(converter = EmailSubscriptionTypeConverter.class)
+    public EmailSubscriptionType subscriptionType;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;
         }
-        if (o instanceof EndpointEmailSubscriptionEntityId) {
-            EndpointEmailSubscriptionEntityId other = (EndpointEmailSubscriptionEntityId) o;
+        if (o instanceof EmailSubscriptionId) {
+            EmailSubscriptionId other = (EmailSubscriptionId) o;
             return Objects.equals(accountId, other.accountId) &&
                     Objects.equals(userId, other.userId) &&
                     Objects.equals(subscriptionType, other.subscriptionType) &&
