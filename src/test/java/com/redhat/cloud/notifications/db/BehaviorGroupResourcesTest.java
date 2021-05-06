@@ -275,7 +275,7 @@ public class BehaviorGroupResourcesTest extends DbIsolatedTest {
         behaviorGroup.setId(behaviorGroupId);
         behaviorGroup.setDisplayName(displayName);
         behaviorGroup.setBundleId(UUID.randomUUID()); // This should not have any effect, the bundle is not updatable.
-        return behaviorGroupResources.update(ACCOUNT_ID, behaviorGroup).await().indefinitely();
+        return behaviorGroupResources.update(ACCOUNT_ID, behaviorGroup).onItem().transform(rowCount -> rowCount > 0).await().indefinitely();
     }
 
     private Boolean deleteBehaviorGroup(UUID behaviorGroupId) {

@@ -304,11 +304,18 @@ public class NotificationService {
     @Path("/behaviorGroups/{id}")
     @Operation(summary = "Update a behavior group.", hidden = true)
     @RolesAllowed(RbacIdentityProvider.RBAC_WRITE_NOTIFICATIONS)
-    public Uni<Boolean> updateBehaviorGroup(@Context SecurityContext sec, @PathParam("id") UUID id, @NotNull @Valid BehaviorGroup behaviorGroup) {
+    public Uni<Response> updateBehaviorGroup(@Context SecurityContext sec, @PathParam("id") UUID id, @NotNull @Valid BehaviorGroup behaviorGroup) {
         return getAccountId(sec)
                 .onItem().transformToUni(accountId -> {
                     behaviorGroup.setId(id);
                     return behaviorGroupResources.update(accountId, behaviorGroup);
+                })
+                .onItem().transform(rowCount -> {
+                    if (rowCount == 0) {
+                        return Response.status(Response.Status.NOT_FOUND).build();
+                    } else {
+                        return Response.ok().build();
+                    }
                 });
     }
 

@@ -31,6 +31,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.BAD_REQUEST;
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.NOT_FOUND;
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.OK;
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.createBehaviorGroup;
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.createBundle;
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.deleteBehaviorGroup;
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.getBehaviorGroups;
+import static com.redhat.cloud.notifications.helpers.RestApiHelpers.updateBehaviorGroup;
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -49,6 +57,7 @@ public class NotificationServiceTest extends DbIsolatedTest {
 
     private static final String TENANT = "NotificationServiceTest";
     private static final String USERNAME = "user";
+    private static final String NOT_USED = "not-used-in-assertions";
 
     @MockServerConfig
     MockServerClientConfig mockServerConfig;
@@ -505,6 +514,56 @@ public class NotificationServiceTest extends DbIsolatedTest {
         Optional<Facet> rhel = bundles.stream().filter(facet -> facet.getName().equals("rhel")).findFirst();
         assertTrue(rhel.isPresent());
         assertEquals("Red Hat Enterprise Linux", rhel.get().getDisplayName());
+    }
+
+    @Test
+    void testCreateNullBehaviorGroup() {
+        Header identityHeader = initRbacMock("test", "user", RbacAccess.FULL_ACCESS);
+        createBehaviorGroup(identityHeader, null, BAD_REQUEST);
+    }
+
+    @Test
+    void testCreateInvalidBehaviorGroup() {
+        Header identityHeader = initRbacMock("test", "user", RbacAccess.FULL_ACCESS);
+        String bundleId = createBundle("bundle-name", "Bundle", OK).get();
+        createBehaviorGroup(identityHeader, null, "I am valid", BAD_REQUEST);
+        createBehaviorGroup(identityHeader, bundleId, null, BAD_REQUEST);
+    }
+
+    @Test
+    void testUpdateNullBehaviorGroup() {
+        Header identityHeader = initRbacMock("test", "user", RbacAccess.FULL_ACCESS);
+        String bundleId = createBundle("bundle-name", "Bundle", OK).get();
+        String behaviorGroupId = createBehaviorGroup(identityHeader, bundleId, "Behavior group", OK).get();
+        updateBehaviorGroup(identityHeader, behaviorGroupId, null, BAD_REQUEST);
+    }
+
+    @Test
+    public void testCreateAndGetAndUpdateAndDeleteBehaviorGroup() {
+        Header identityHeader = initRbacMock("test", "user", RbacAccess.FULL_ACCESS);
+
+        // We need to persist a bundle for this test.
+        String bundleId = createBundle("bundle-name", "Bundle", OK).get();
+
+        // First, we create two behavior groups. Only the second one will be used after that.
+        createBehaviorGroup(identityHeader, bundleId, "Behavior group 1", OK).get();
+        String behaviorGroupId = createBehaviorGroup(identityHeader, bundleId, "Behavior group 2", OK).get();
+
+        // The bundle should contain two behavior groups.
+        getBehaviorGroups(identityHeader, bundleId, OK, 2);
+
+        // Let's test the behavior group update API.
+        updateBehaviorGroup(identityHeader, behaviorGroupId, bundleId, "Behavior group 2 new display name", OK);
+
+        // Same for the behavior group delete API.
+        deleteBehaviorGroup(identityHeader, behaviorGroupId, true);
+
+        // Now that we deleted the behavior group, all the following APIs calls should "fail".
+        deleteBehaviorGroup(identityHeader, behaviorGroupId, false);
+        updateBehaviorGroup(identityHeader, behaviorGroupId, bundleId, NOT_USED, NOT_FOUND);
+
+        // The bundle should also contain one behavior group now.
+        getBehaviorGroups(identityHeader, bundleId, OK, 1);
     }
 
     @Test

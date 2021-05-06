@@ -49,15 +49,14 @@ public class BehaviorGroupResources {
     }
 
     // TODO Should this be forbidden for default behavior groups?
-    public Uni<Boolean> update(String accountId, BehaviorGroup behaviorGroup) {
+    public Uni<Integer> update(String accountId, BehaviorGroup behaviorGroup) {
         String query = "UPDATE BehaviorGroup SET displayName = :displayName WHERE accountId = :accountId AND id = :id";
         return session.createQuery(query)
                 .setParameter("displayName", behaviorGroup.getDisplayName())
                 .setParameter("accountId", accountId)
                 .setParameter("id", behaviorGroup.getId())
                 .executeUpdate()
-                .call(session::flush)
-                .onItem().transform(rowCount -> rowCount > 0);
+                .call(session::flush);
     }
 
     // TODO Should this be forbidden for default behavior groups?
