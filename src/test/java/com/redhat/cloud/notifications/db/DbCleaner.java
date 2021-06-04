@@ -13,16 +13,18 @@ import com.redhat.cloud.notifications.models.EventType;
 import com.redhat.cloud.notifications.models.EventTypeBehavior;
 import com.redhat.cloud.notifications.models.NotificationHistory;
 import com.redhat.cloud.notifications.models.WebhookProperties;
-import io.smallrye.mutiny.Uni;
-import org.hibernate.reactive.mutiny.Mutiny;
+import io.vertx.mutiny.pgclient.PgPool;
+import io.vertx.mutiny.sqlclient.Tuple;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.Path;
+import javax.persistence.Table;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
-@Path("/internal/db_cleaner")
+@ApplicationScoped
 public class DbCleaner {
 
     private static final String DEFAULT_BUNDLE_NAME = "rhel";
@@ -34,13 +36,7 @@ public class DbCleaner {
     private static final String DEFAULT_EVENT_TYPE_DESCRIPTION = "Matching policy";
 
     @Inject
-    Mutiny.Session session;
-
-    @Inject
-    BundleResources bundleResources;
-
-    @Inject
-    ApplicationResources appResources;
+    PgPool pgClient;
 
     /**
      * Deletes all records from all database tables (except for flyway_schema_history) and restores the default records.
@@ -49,46 +45,41 @@ public class DbCleaner {
      * should do that with {@link io.quarkus.test.TestTransaction} but it doesn't work with Hibernate Reactive, so this
      * is a temporary workaround to make our tests more reliable and easy to maintain.
      */
-    @DELETE
-    public Uni<Void> clean() {
-        return session.withTransaction(transaction -> deleteAllFrom(EmailAggregation.class)
-                .chain(() -> deleteAllFrom(EmailSubscription.class))
-                .chain(() -> deleteAllFrom(NotificationHistory.class))
-                .chain(() -> deleteAllFrom(EndpointDefault.class)) // TODO [BG Phase 2] Delete this line
-                .chain(() -> deleteAllFrom(EndpointTarget.class)) // TODO [BG Phase 2] Delete this line
-                .chain(() -> deleteAllFrom(BehaviorGroupAction.class))
-                .chain(() -> deleteAllFrom(WebhookProperties.class))
-                .chain(() -> deleteAllFrom(Endpoint.class))
-                .chain(() -> deleteAllFrom(EventTypeBehavior.class))
-                .chain(() -> deleteAllFrom(BehaviorGroup.class))
-                .chain(() -> deleteAllFrom(EventType.class))
-                .chain(() -> deleteAllFrom(Application.class))
-                .chain(() -> deleteAllFrom(Bundle.class))
-                .chain(() -> {
-                    Bundle bundle = new Bundle(DEFAULT_BUNDLE_NAME, DEFAULT_BUNDLE_DISPLAY_NAME);
-                    return bundleResources.createBundle(bundle);
-                })
-                .onItem().transformToUni(bundle -> {
-                    Application app = new Application();
-                    app.setBundleId(bundle.getId());
-                    app.setName(DEFAULT_APP_NAME);
-                    app.setDisplayName(DEFAULT_APP_DISPLAY_NAME);
-                    app.setBundleId(bundle.getId());
-                    return appResources.createApp(app);
-                })
-                .onItem().transformToUni(app -> {
-                    EventType eventType = new EventType();
-                    eventType.setApplicationId(app.getId());
-                    eventType.setName(DEFAULT_EVENT_TYPE_NAME);
-                    eventType.setDisplayName(DEFAULT_EVENT_TYPE_DISPLAY_NAME);
-                    eventType.setDescription(DEFAULT_EVENT_TYPE_DESCRIPTION);
-                    return appResources.createEventType(eventType);
-                })
-                .replaceWith(Uni.createFrom().voidItem())
-        );
+    public void clean() {
+        deleteAllFrom(EmailAggregation.class);
+        deleteAllFrom(EmailSubscription.class);
+        deleteAllFrom(NotificationHistory.class);
+        deleteAllFrom(EndpointDefault.class); // TODO [BG Phase 2] Delete this line
+        deleteAllFrom(EndpointTarget.class); // TODO [BG Phase 2] Delete this line
+        deleteAllFrom(BehaviorGroupAction.class);
+        deleteAllFrom(WebhookProperties.class);
+        deleteAllFrom(Endpoint.class);
+        deleteAllFrom(EventTypeBehavior.class);
+        deleteAllFrom(BehaviorGroup.class);
+        deleteAllFrom(EventType.class);
+        deleteAllFrom(Application.class);
+        deleteAllFrom(Bundle.class);
+
+        UUID bundleId = UUID.randomUUID();
+        pgClient.preparedQuery("INSERT INTO " + getTableName(Bundle.class) + " (id, name, display_name, created) VALUES ($1, $2, $3, $4)")
+                .execute(Tuple.of(bundleId, DEFAULT_BUNDLE_NAME, DEFAULT_BUNDLE_DISPLAY_NAME, LocalDateTime.now()))
+                .await().indefinitely();
+
+        UUID appId = UUID.randomUUID();
+        pgClient.preparedQuery("INSERT INTO " + getTableName(Application.class) + " (id, name, display_name, created, bundle_id) VALUES ($1, $2, $3, $4, $5)")
+                .execute(Tuple.of(appId, DEFAULT_APP_NAME, DEFAULT_APP_DISPLAY_NAME, LocalDateTime.now(), bundleId))
+                .await().indefinitely();
+
+        pgClient.preparedQuery("INSERT INTO " + getTableName(EventType.class) + " (id, name, display_name, description, application_id) VALUES ($1, $2, $3, $4, $5)")
+                .execute(Tuple.of(bundleId, DEFAULT_EVENT_TYPE_NAME, DEFAULT_EVENT_TYPE_DISPLAY_NAME, DEFAULT_EVENT_TYPE_DESCRIPTION, appId))
+                .await().indefinitely();
     }
 
-    private Uni<Integer> deleteAllFrom(Class<?> classname) {
-        return session.createQuery("DELETE FROM " + classname.getSimpleName()).executeUpdate();
+    private void deleteAllFrom(Class<?> entityClass) {
+        pgClient.query("DELETE FROM " + getTableName(entityClass)).executeAndAwait();
+    }
+
+    private String getTableName(Class<?> entityClass) {
+        return entityClass.getAnnotation(Table.class).name();
     }
 }
