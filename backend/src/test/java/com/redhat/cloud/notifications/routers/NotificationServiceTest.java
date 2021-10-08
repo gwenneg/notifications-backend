@@ -193,15 +193,23 @@ public class NotificationServiceTest extends DbIsolatedTest {
         sessionFactory.withSession(session -> helpers.createTestAppAndEventTypes()
                 .chain(() -> applicationResources.getApplications(TEST_BUNDLE_NAME))
                 .invoke(apps -> {
+                    System.out.println("======================Invoke start");
                     Application app = apps.stream().filter(a -> a.getName().equals(TEST_APP_NAME_2)).findFirst().get();
+                    System.out.println("======================Invoke 1");
                     UUID myOtherTesterApplicationId = app.getId();
+                    System.out.println("======================Invoke 2");
                     model.applicationIds.add(myOtherTesterApplicationId);
+                    System.out.println("======================Invoke 3");
                     UUID myBundleId = app.getBundleId();
+                    System.out.println("======================Invoke 4");
                     model.bundleIds.add(myBundleId);
+                    System.out.println("======================Invoke end");
                 })
                 .chain(runOnWorkerThread(() -> {
-                    Header identityHeader = initRbacMock(TENANT, USERNAME, RbacAccess.FULL_ACCESS);
+                    System.out.println("======================Worker thread start");
+                    Header identityHeader = initRbacMock(TENANT, USERNAME, FULL_ACCESS);
 
+                    System.out.println("======================Worker thread 1");
                     Response response = given()
                             .when()
                             .header(identityHeader)
@@ -212,16 +220,21 @@ public class NotificationServiceTest extends DbIsolatedTest {
                             .statusCode(200)
                             .contentType(JSON)
                             .extract().response();
+                    System.out.println("======================Worker thread 2");
 
                     JsonArray eventTypes = new JsonArray(response.getBody().asString());
+                    System.out.println("======================Worker thread 3");
                     for (int i = 0; i < eventTypes.size(); i++) {
+                        System.out.println("======================Worker thread 4-" + i);
                         JsonObject ev = eventTypes.getJsonObject(i);
                         ev.mapTo(EventType.class);
                         assertEquals(model.bundleIds.get(0).toString(), ev.getJsonObject("application").getString("bundle_id"));
                         assertEquals(model.applicationIds.get(0).toString(), ev.getJsonObject("application").getString("id"));
                     }
+                    System.out.println("======================Worker thread 5");
 
                     assertEquals(100, eventTypes.size());
+                    System.out.println("======================Worker thread end");
                 }))
         ).await().indefinitely();
     }
