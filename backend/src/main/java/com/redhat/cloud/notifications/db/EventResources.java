@@ -49,6 +49,7 @@ public class EventResources {
                         }
 
                         return session.createQuery(hql, Event.class)
+                                .setReadOnly(true)
                                 .setParameter("accountId", accountId)
                                 .setParameter("eventIds", eventIds)
                                 .getResultList();
@@ -59,7 +60,7 @@ public class EventResources {
     public Uni<Long> count(String accountId, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
                       LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults) {
         return sessionFactory.withSession(session -> {
-            String hql = "SELECT COUNT(*) FROM Event e JOIN e.eventType et JOIN et.application a JOIN a.bundle b " +
+            String hql = "SELECT COUNT(*) FROM Event e JOIN e.eventType et JOIN et.application a " +
                     "WHERE e.accountId = :accountId";
 
             hql = addHqlConditions(hql, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults);
@@ -90,7 +91,7 @@ public class EventResources {
                                         LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults,
                                         Integer limit, Integer offset, Optional<String> orderByCondition) {
         return sessionFactory.withSession(session -> {
-            String hql = "SELECT e.id FROM Event e JOIN e.eventType et JOIN et.application a JOIN a.bundle b " +
+            String hql = "SELECT e.id FROM Event e JOIN e.eventType et JOIN et.application a " +
                     "WHERE e.accountId = :accountId";
 
             hql = addHqlConditions(hql, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults);
@@ -116,7 +117,7 @@ public class EventResources {
     private static String addHqlConditions(String hql, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
                                            LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults) {
         if (bundleIds != null && !bundleIds.isEmpty()) {
-            hql += " AND b.id IN (:bundleIds)";
+            hql += " AND a.bundle.id IN (:bundleIds)";
         }
         if (appIds != null && !appIds.isEmpty()) {
             hql += " AND a.id IN (:appIds)";
