@@ -154,6 +154,7 @@ public class CamelTypeProcessor implements EndpointTypeProcessor {
         LOGGER.infof("Sending for account %s and history id %s", accountId, historyId);
         Message<String> finalMsg = msg;
         return Uni.createFrom().item(() -> {
+            emitter.send(Message.of("bla"));
             emitter.send(finalMsg);
             return true;
         });
