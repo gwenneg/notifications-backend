@@ -91,8 +91,6 @@ objects:
               optional: true
         - name: NOTIFICATIONS_KAFKA_CONSUMED_TOTAL_CHECKER_ENABLED
           value: ${KAFKA_CONSUMED_TOTAL_CHECKER_ENABLED}
-        - name: NOTIFICATIONS_KAFKA_CONSUMED_TOTAL_CHECKER_MAX_FAILURES
-          value: ${KAFKA_CONSUMED_TOTAL_CHECKER_MAX_FAILURES}
         - name: PROCESSOR_EMAIL_BOP_APITOKEN
           valueFrom:
             secretKeyRef:
