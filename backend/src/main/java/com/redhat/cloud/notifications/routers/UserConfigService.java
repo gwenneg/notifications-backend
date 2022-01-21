@@ -15,11 +15,11 @@ import com.redhat.cloud.notifications.routers.models.SettingsValues;
 import com.redhat.cloud.notifications.routers.models.SettingsValues.ApplicationSettingsValue;
 import com.redhat.cloud.notifications.routers.models.SettingsValues.BundleSettingsValue;
 import com.redhat.cloud.notifications.routers.models.UserConfigPreferences;
-import com.redhat.cloud.notifications.templates.EmailTemplate;
-import com.redhat.cloud.notifications.templates.EmailTemplateFactory;
+import com.redhat.cloud.notifications.templates.TemplateEngineClient;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.hibernate.reactive.mutiny.Mutiny;
 
 import javax.inject.Inject;
@@ -57,7 +57,8 @@ public class UserConfigService {
     ApplicationResources applicationResources;
 
     @Inject
-    EmailTemplateFactory emailTemplateFactory;
+    @RestClient
+    TemplateEngineClient templateEngineClient;
 
     @Inject
     Mutiny.SessionFactory sessionFactory;
@@ -186,10 +187,9 @@ public class UserConfigService {
                                                 for (Application application : applications) {
                                                     ApplicationSettingsValue applicationSettingsValue = new ApplicationSettingsValue();
                                                     applicationSettingsValue.displayName = application.getDisplayName();
-                                                    EmailTemplate applicationEmailTemplate = emailTemplateFactory.get(bundle.getName(), application.getName());
                                                     settingsValues.bundles.get(bundle.getName()).applications.put(application.getName(), applicationSettingsValue);
                                                     for (EmailSubscriptionType emailSubscriptionType : EmailSubscriptionType.values()) {
-                                                        if (applicationEmailTemplate.isEmailSubscriptionSupported(emailSubscriptionType)) {
+                                                        if (templateEngineClient.isSubscriptionTypeSupported(bundle.getName(), application.getName(), emailSubscriptionType)) {
                                                             settingsValues.bundles.get(bundle.getName()).applications.get(application.getName()).notifications.put(emailSubscriptionType, false);
                                                         }
                                                     }

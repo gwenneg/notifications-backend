@@ -1,6 +1,7 @@
 package com.redhat.cloud.notifications;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+import io.smallrye.reactive.messaging.providers.connectors.InMemoryConnector;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.containers.MockServerContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -12,6 +13,12 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
+
+import static com.redhat.cloud.notifications.events.EventConsumer.INGRESS_CHANNEL;
+import static com.redhat.cloud.notifications.events.FromCamelHistoryFiller.EGRESS_CHANNEL;
+import static com.redhat.cloud.notifications.events.FromCamelHistoryFiller.FROMCAMEL_CHANNEL;
+import static com.redhat.cloud.notifications.processors.camel.CamelTypeProcessor.TOCAMEL_CHANNEL;
+import static com.redhat.cloud.notifications.processors.email.EmailSubscriptionTypeProcessor.AGGREGATION_CHANNEL;
 
 public class TestLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
@@ -33,6 +40,18 @@ public class TestLifecycleManager implements QuarkusTestResourceLifecycleManager
         }
         setupMockEngine(properties);
 
+        /*
+         * We'll use an in-memory Reactive Messaging connector to send payloads.
+         * See https://smallrye.io/smallrye-reactive-messaging/smallrye-reactive-messaging/2/testing/testing.html
+         */
+        properties.putAll(InMemoryConnector.switchIncomingChannelsToInMemory(INGRESS_CHANNEL));
+        properties.putAll(InMemoryConnector.switchIncomingChannelsToInMemory(AGGREGATION_CHANNEL));
+        properties.putAll(InMemoryConnector.switchOutgoingChannelsToInMemory(TOCAMEL_CHANNEL));
+        properties.putAll(InMemoryConnector.switchIncomingChannelsToInMemory(FROMCAMEL_CHANNEL));
+        properties.putAll(InMemoryConnector.switchOutgoingChannelsToInMemory(EGRESS_CHANNEL));
+
+        properties.put("reinject.enabled", "true");
+
         System.out.println(" -- Running with properties: " + properties);
         return properties;
     }
@@ -41,7 +60,9 @@ public class TestLifecycleManager implements QuarkusTestResourceLifecycleManager
     public void stop() {
         postgreSQLContainer.stop();
         mockEngineServer.stop();
+        InMemoryConnector.clear();
     }
+
 
     @Override
     public void inject(Object testInstance) {
@@ -99,6 +120,6 @@ public class TestLifecycleManager implements QuarkusTestResourceLifecycleManager
 
         configurator = new MockServerClientConfig(mockEngineServer.getContainerIpAddress(), mockEngineServer.getServerPort());
 
-        props.put("quarkus.rest-client.rbac-authentication.url", mockServerUrl);
+        props.put("quarkus.rest-client.rbac-s2s.url", mockServerUrl);
     }
 }
