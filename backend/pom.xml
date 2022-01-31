@@ -34,10 +34,6 @@
         <!-- Quarkus -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-smallrye-reactive-messaging-kafka</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
             <artifactId>quarkus-resteasy-reactive-jackson</artifactId>
         </dependency>
         <dependency>
@@ -96,10 +92,6 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-reactive-pg-client</artifactId>
         </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-scheduler</artifactId>
-        </dependency>
 
         <!-- Flyway specific dependencies -->
         <dependency>
@@ -146,8 +138,10 @@
 
         <!-- Test dependencies -->
         <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5</artifactId>
+            <groupId>com.redhat.cloud.notifications</groupId>
+            <artifactId>notifications-common</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -253,33 +247,6 @@
                     </includeOnlyProperties>
                     <generateGitPropertiesFile>true</generateGitPropertiesFile>
                 </configuration>
-            </plugin>
-            <!--
-            TODO quarkus-qute hack, remove it ASAP!
-            With Quarkus 2.3.1.Final, Qute is not able to find the templates resources located in the engine module when
-            the templates tests are run from the backend module. This issue does not exist with Quarkus > 2.6 so the
-            following configuration is only temporary and will be removed when the notifications split is over.
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.2.0</version>
-                <executions>
-                    <execution>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${basedir}/target/classes/templates</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>../engine/src/main/resources/templates</directory>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

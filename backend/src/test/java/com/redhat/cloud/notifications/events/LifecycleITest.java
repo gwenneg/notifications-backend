@@ -26,8 +26,7 @@ import com.redhat.cloud.notifications.recipients.rbac.RbacRecipientUsersProvider
 import com.redhat.cloud.notifications.routers.models.RequestEmailSubscriptionProperties;
 import com.redhat.cloud.notifications.routers.models.SettingsValues;
 import com.redhat.cloud.notifications.routers.models.internal.RequestDefaultBehaviorGroupPropertyList;
-import com.redhat.cloud.notifications.templates.Blank;
-import com.redhat.cloud.notifications.templates.EmailTemplateFactory;
+import com.redhat.cloud.notifications.templates.TemplateEngineClient;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
@@ -74,6 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockserver.model.HttpResponse.response;
@@ -107,16 +107,16 @@ public class LifecycleITest extends DbIsolatedTest {
     MicrometerAssertionHelper micrometerAssertionHelper;
 
     @InjectMock
-    EmailTemplateFactory emailTemplateFactory;
+    RbacRecipientUsersProvider rbacRecipientUsersProvider;
 
     @InjectMock
-    RbacRecipientUsersProvider rbacRecipientUsersProvider;
+    TemplateEngineClient templateEngineClient;
 
     // InjectSpy allows us to update the fields via reflection (Inject does not)
     @InjectSpy
     EmailSender emailSender;
 
-    private Header initRbacMock(String tenant, String username, MockServerClientConfig.RbacAccess access) {
+    private Header initRbacMock(String tenant, String username, RbacAccess access) {
         String identityHeaderValue = TestHelpers.encodeIdentityInfo(tenant, username);
         mockServerConfig.addMockRbacAccess(identityHeaderValue, access);
         return TestHelpers.createIdentityHeader(identityHeaderValue);
@@ -603,7 +603,7 @@ public class LifecycleITest extends DbIsolatedTest {
     }
 
     private void setupEmailMock(String accountId, String username) {
-        Mockito.when(emailTemplateFactory.get(anyString(), anyString())).thenReturn(new Blank());
+        Mockito.when(templateEngineClient.isSubscriptionTypeSupported(anyString(), anyString(), any(EmailSubscriptionType.class))).thenReturn(Uni.createFrom().item(true));
 
         User user = new User();
         user.setUsername(username);
