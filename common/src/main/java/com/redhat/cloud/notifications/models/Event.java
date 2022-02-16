@@ -43,6 +43,9 @@ public class Event extends CreationTimestamped {
     @Transient
     private Action action;
 
+    @Transient
+    private FlatEvent flatEvent;
+
     public Event() { }
 
     public Event(EventType eventType, String payload, Action action) {
@@ -98,6 +101,14 @@ public class Event extends CreationTimestamped {
 
     public void setAction(Action action) {
         this.action = action;
+    }
+
+    public FlatEvent getFlatEvent() {
+        return flatEvent;
+    }
+
+    public void setFlatEvent(FlatEvent flatEvent) {
+        this.flatEvent = flatEvent;
     }
 
     @Override

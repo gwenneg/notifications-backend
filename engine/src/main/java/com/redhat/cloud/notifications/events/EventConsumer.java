@@ -152,13 +152,11 @@ public class EventConsumer {
                                                                  * message and persist it.
                                                                  */
                                                                 // TODO NOTIF-450 Completely replace the old Event with FlatEvent.
+                                                                FlatEvent flatEvent = new FlatEvent(action.getAccountId(), payload, eventType);
                                                                 Event event = new Event(eventType, payload, action);
+                                                                event.setFlatEvent(flatEvent);
                                                                 return eventRepository.create(event)
-                                                                        .call(() -> {
-                                                                            System.out.println("======================OK");
-                                                                            FlatEvent flatEvent = new FlatEvent(action.getAccountId(), payload, eventType);
-                                                                            return eventRepository.createFlat(flatEvent);
-                                                                        });
+                                                                        .call(() -> eventRepository.createFlat(flatEvent));
                                                             })
                                                             /*
                                                              * Step 7

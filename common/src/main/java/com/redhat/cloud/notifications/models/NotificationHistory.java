@@ -197,6 +197,7 @@ public class NotificationHistory extends CreationTimestamped {
         history.setEndpointType(endpoint.getType());
         history.setEndpointSubType(endpoint.getSubType());
         history.setEvent(event);
+        history.setFlatEvent(event.getFlatEvent());
         history.setInvocationResult(false);
         history.setId(historyId);
         return history;
