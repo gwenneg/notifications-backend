@@ -145,6 +145,7 @@ public class EventConsumer {
                                                                 rejectedCounter.increment();
                                                             })
                                                             .onItem().transformToUni(eventType -> {
+                                                                System.out.println("$$$$$$$$$$$$$$$$$" + eventType);
                                                                 /*
                                                                  * Step 6
                                                                  * The EventType was found. It's time to create an Event from the current
