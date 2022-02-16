@@ -154,6 +154,7 @@ public class EventConsumer {
                                                                 Event event = new Event(eventType, payload, action);
                                                                 return eventRepository.create(event)
                                                                         .call(() -> {
+                                                                            System.out.println("======================OK");
                                                                             FlatEvent flatEvent = new FlatEvent(action.getAccountId(), payload, eventType);
                                                                             return eventRepository.createFlat(flatEvent);
                                                                         });

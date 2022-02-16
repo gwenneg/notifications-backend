@@ -11,6 +11,7 @@ import com.redhat.cloud.notifications.db.ResourceHelpers;
 import com.redhat.cloud.notifications.models.EndpointType;
 import com.redhat.cloud.notifications.models.Event;
 import com.redhat.cloud.notifications.models.EventType;
+import com.redhat.cloud.notifications.models.FlatEvent;
 import com.redhat.cloud.notifications.models.NotificationHistory;
 import com.redhat.cloud.notifications.routers.models.EventLogEntry;
 import com.redhat.cloud.notifications.routers.models.EventLogEntryAction;
@@ -534,6 +535,23 @@ public class EventServiceTest extends DbIsolatedTest {
         event.setPayload(PAYLOAD);
         return sessionFactory.withStatelessSession(statelessSession -> statelessSession.insert(event)
                 .replaceWith(event)
+        );
+    }
+
+    private Uni<FlatEvent> createFlatEvent(String accountId, UUID bundleId, String bundleDisplayName, UUID applicationId,
+                                           String applicationDisplayName, UUID eventTypeId, String eventTypeDisplayName, LocalDateTime created) {
+        FlatEvent flatEvent = new FlatEvent();
+        flatEvent.setAccountId(accountId);
+        flatEvent.setBundleId(bundleId);
+        flatEvent.setBundleDisplayName(bundleDisplayName);
+        flatEvent.setApplicationId(applicationId);
+        flatEvent.setApplicationDisplayName(applicationDisplayName);
+        flatEvent.setEventTypeId(eventTypeId);
+        flatEvent.setEventTypeDisplayName(eventTypeDisplayName);
+        flatEvent.setPayload(PAYLOAD);
+        flatEvent.setCreated(created);
+        return sessionFactory.withStatelessSession(statelessSession -> statelessSession.insert(flatEvent)
+                .replaceWith(flatEvent)
         );
     }
 
