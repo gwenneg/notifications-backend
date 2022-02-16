@@ -42,6 +42,11 @@ public class NotificationHistory extends CreationTimestamped {
     @JsonIgnore
     private Event event;
 
+    @ManyToOne(fetch = LAZY)
+    @JoinColumn(name = "flat_event_id")
+    @JsonIgnore
+    private FlatEvent flatEvent;
+
     @Transient
     private UUID endpointId;
 
@@ -115,6 +120,14 @@ public class NotificationHistory extends CreationTimestamped {
 
     public void setEvent(Event event) {
         this.event = event;
+    }
+
+    public FlatEvent getFlatEvent() {
+        return flatEvent;
+    }
+
+    public void setFlatEvent(FlatEvent flatEvent) {
+        this.flatEvent = flatEvent;
     }
 
     public UUID getEndpointId() {

@@ -57,6 +57,10 @@ public class EventService {
     @ConfigProperty(name = "notifications.event-service.legacy-mode", defaultValue = "true")
     boolean legacyMode;
 
+    // TODO NOTIF-491 Remove this after the data migration on prod.
+    @ConfigProperty(name = "notifications.event-service.enable-flat-events", defaultValue = "false")
+    boolean enableFlatEvents;
+
     @GET
     @Produces(APPLICATION_JSON)
     @RolesAllowed(RBAC_READ_NOTIFICATIONS_EVENTS)
@@ -76,7 +80,7 @@ public class EventService {
         return sessionFactory.withSession(session -> {
             return getAccountId(securityContext)
                     .onItem().transformToUni(accountId ->
-                            eventResources.getEvents(accountId, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults, fetchNotificationHistory, limit, offset, sortBy)
+                            eventResources.getEvents(enableFlatEvents, accountId, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults, fetchNotificationHistory, limit, offset, sortBy)
                                     .onItem().transform(events ->
                                             events.stream().map(event -> {
                                                 List<EventLogEntryAction> actions;
@@ -111,7 +115,7 @@ public class EventService {
                                             }).collect(Collectors.toList())
                                     )
                                     .onItem().transformToUni(entries ->
-                                            eventResources.count(accountId, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults)
+                                            eventResources.count(enableFlatEvents, accountId, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults)
                                                     .onItem().transform(count -> {
                                                         Meta meta = new Meta();
                                                         meta.setCount(count);

@@ -3,6 +3,7 @@ package com.redhat.cloud.notifications.events;
 import com.redhat.cloud.notifications.db.repositories.EventRepository;
 import com.redhat.cloud.notifications.db.repositories.EventTypeRepository;
 import com.redhat.cloud.notifications.models.Event;
+import com.redhat.cloud.notifications.models.FlatEvent;
 import com.redhat.cloud.notifications.utils.ActionParser;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -149,8 +150,13 @@ public class EventConsumer {
                                                                  * The EventType was found. It's time to create an Event from the current
                                                                  * message and persist it.
                                                                  */
+                                                                // TODO NOTIF-450 Completely replace the old Event with FlatEvent.
                                                                 Event event = new Event(eventType, payload, action);
-                                                                return eventRepository.create(event);
+                                                                return eventRepository.create(event)
+                                                                        .call(() -> {
+                                                                            FlatEvent flatEvent = new FlatEvent(action.getAccountId(), payload, eventType);
+                                                                            return eventRepository.createFlat(flatEvent);
+                                                                        });
                                                             })
                                                             /*
                                                              * Step 7

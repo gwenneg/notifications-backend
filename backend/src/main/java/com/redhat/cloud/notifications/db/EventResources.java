@@ -26,17 +26,24 @@ public class EventResources {
     @Inject
     Mutiny.SessionFactory sessionFactory;
 
-    public Uni<List<Event>> getEvents(String accountId, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
+    public Uni<List<Event>> getEvents(boolean enableFlatEvents, String accountId, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
                                       LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults,
                                       boolean fetchNotificationHistory, Integer limit, Integer offset, String sortBy) {
         return sessionFactory.withSession(session -> {
-            Optional<String> orderByCondition = getOrderByCondition(sortBy);
-            return getEventIds(accountId, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults, limit, offset, orderByCondition)
+            Optional<String> orderByCondition = getOrderByCondition(enableFlatEvents, sortBy);
+            return getEventIds(enableFlatEvents, accountId, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults, limit, offset, orderByCondition)
                     .onItem().transformToUni(eventIds -> {
-                        String hql = "SELECT " + (fetchNotificationHistory ? "DISTINCT " : "") + "e FROM Event e " +
-                                "JOIN FETCH e.eventType et JOIN FETCH et.application a JOIN FETCH a.bundle b " +
-                                (fetchNotificationHistory ? "LEFT JOIN FETCH e.historyEntries he " : "") +
-                                "WHERE e.accountId = :accountId AND e.id IN (:eventIds)";
+                        String hql;
+                        if (enableFlatEvents) {
+                            hql = "SELECT " + (fetchNotificationHistory ? "DISTINCT " : "") + "e FROM FlatEvent e " +
+                                    (fetchNotificationHistory ? "LEFT JOIN FETCH e.historyEntries he " : "") +
+                                    "WHERE e.accountId = :accountId AND e.id IN (:eventIds)";
+                        } else {
+                            hql = "SELECT " + (fetchNotificationHistory ? "DISTINCT " : "") + "e FROM Event e " +
+                                    "JOIN FETCH e.eventType et JOIN FETCH et.application a JOIN FETCH a.bundle b " +
+                                    (fetchNotificationHistory ? "LEFT JOIN FETCH e.historyEntries he " : "") +
+                                    "WHERE e.accountId = :accountId AND e.id IN (:eventIds)";
+                        }
 
                         if (orderByCondition.isPresent()) {
                             hql += orderByCondition.get();
@@ -52,13 +59,18 @@ public class EventResources {
         });
     }
 
-    public Uni<Long> count(String accountId, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
-                      LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults) {
+    public Uni<Long> count(boolean enableFlatEvents, String accountId, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
+                           LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults) {
         return sessionFactory.withSession(session -> {
-            String hql = "SELECT COUNT(*) FROM Event e JOIN e.eventType et JOIN et.application a JOIN a.bundle b " +
-                    "WHERE e.accountId = :accountId";
+            String hql;
+            if (enableFlatEvents) {
+                hql = "SELECT COUNT(*) FROM FlatEvent e WHERE accountId = :accountId";
+            } else {
+                hql = "SELECT COUNT(*) FROM Event e JOIN e.eventType et JOIN et.application a JOIN a.bundle b " +
+                        "WHERE e.accountId = :accountId";
+            }
 
-            hql = addHqlConditions(hql, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults);
+            hql = addHqlConditions(enableFlatEvents, hql, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults);
 
             Mutiny.Query<Long> query = session.createQuery(hql, Long.class);
             setQueryParams(query, accountId, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults);
@@ -69,13 +81,13 @@ public class EventResources {
         });
     }
 
-    private Optional<String> getOrderByCondition(String sortBy) {
+    private Optional<String> getOrderByCondition(boolean enableFlatEvents, String sortBy) {
         if (sortBy == null) {
             return Optional.of(" ORDER BY e.created DESC");
         } else {
             Matcher sortByMatcher = SORT_BY_PATTERN.matcher(sortBy);
             if (sortByMatcher.matches()) {
-                String sortField = getSortField(sortByMatcher.group(1));
+                String sortField = getSortField(enableFlatEvents, sortByMatcher.group(1));
                 String sortDirection = sortByMatcher.group(2);
                 return Optional.of(" ORDER BY " + sortField + " " + sortDirection + ", e.created DESC");
             } else {
@@ -84,14 +96,19 @@ public class EventResources {
         }
     }
 
-    private Uni<List<UUID>> getEventIds(String accountId, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
+    private Uni<List<UUID>> getEventIds(boolean enableFlatEvents, String accountId, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
                                         LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults,
                                         Integer limit, Integer offset, Optional<String> orderByCondition) {
         return sessionFactory.withSession(session -> {
-            String hql = "SELECT e.id FROM Event e JOIN e.eventType et JOIN et.application a JOIN a.bundle b " +
-                    "WHERE e.accountId = :accountId";
+            String hql;
+            if (enableFlatEvents) {
+                hql = "SELECT id FROM Event e WHERE e.accountId = :accountId";
+            } else {
+                hql = "SELECT e.id FROM Event e JOIN e.eventType et JOIN et.application a JOIN a.bundle b " +
+                        "WHERE e.accountId = :accountId";
+            }
 
-            hql = addHqlConditions(hql, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults);
+            hql = addHqlConditions(enableFlatEvents, hql, bundleIds, appIds, eventTypeDisplayName, startDate, endDate, endpointTypes, invocationResults);
 
             if (orderByCondition.isPresent()) {
                 hql += orderByCondition.get();
@@ -113,16 +130,16 @@ public class EventResources {
         });
     }
 
-    private static String addHqlConditions(String hql, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
+    private static String addHqlConditions(boolean enableFlatEvents, String hql, Set<UUID> bundleIds, Set<UUID> appIds, String eventTypeDisplayName,
                                            LocalDate startDate, LocalDate endDate, Set<EndpointType> endpointTypes, Set<Boolean> invocationResults) {
         if (bundleIds != null && !bundleIds.isEmpty()) {
-            hql += " AND b.id IN (:bundleIds)";
+            hql += " AND " + (enableFlatEvents ? "bundleId" : "b.id") + " IN (:bundleIds)";
         }
         if (appIds != null && !appIds.isEmpty()) {
-            hql += " AND a.id IN (:appIds)";
+            hql += " AND " + (enableFlatEvents ? "applicationId" : "a.id") + " IN (:appIds)";
         }
         if (eventTypeDisplayName != null) {
-            hql += " AND LOWER(et.displayName) LIKE :eventTypeDisplayName";
+            hql += " AND LOWER(" + (enableFlatEvents ? "eventTypeDisplayName" : "et.displayName") + ") LIKE :eventTypeDisplayName";
         }
         if (startDate != null && endDate != null) {
             hql += " AND DATE(e.created) BETWEEN :startDate AND :endDate";
@@ -142,7 +159,7 @@ public class EventResources {
             if (checkInvocationResult) {
                 subQueryConditions.add("nh.invocationResult IN (:invocationResults)");
             }
-            hql += " AND EXISTS (SELECT 1 FROM NotificationHistory nh WHERE nh.event = e AND " + String.join(" AND ", subQueryConditions) + ")";
+            hql += " AND EXISTS (SELECT 1 FROM NotificationHistory nh WHERE nh." + (enableFlatEvents ? "flatEvent" : "event") + " = e AND " + String.join(" AND ", subQueryConditions) + ")";
         }
 
         return hql;
@@ -174,16 +191,16 @@ public class EventResources {
         }
     }
 
-    private static String getSortField(String field) {
+    private static String getSortField(boolean enableFlatEvents, String field) {
         switch (field) {
             case "bundle":
-                return "b.displayName";
+                return enableFlatEvents ? "bundleDisplayName" : "b.displayName";
             case "application":
-                return "a.displayName";
+                return enableFlatEvents ? "applicationDisplayName" : "a.displayName";
             case "event":
-                return "et.displayName";
+                return enableFlatEvents ? "eventTypeDisplayName" : "et.displayName";
             case "created":
-                return "e.created";
+                return enableFlatEvents ? "created" : "e.created";
             default:
                 throw new IllegalArgumentException("Unknown sort field: " + field);
         }
