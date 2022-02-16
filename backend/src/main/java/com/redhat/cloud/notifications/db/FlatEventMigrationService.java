@@ -40,7 +40,8 @@ public class FlatEventMigrationService {
                         flatEvent.setEventTypeDisplayName(event.getEventType().getDisplayName());
                         flatEvent.setPayload(event.getPayload());
                         return session.persist(flatEvent)
-                                .onItem().call(() -> {
+                                .call(session::flush)
+                                .call(() -> {
                                     return session.createQuery("UPDATE NotificationHistory SET flatEvent = :flatEvent WHERE event = :event")
                                             .setParameter("flatEvent", flatEvent)
                                             .setParameter("event", event)
