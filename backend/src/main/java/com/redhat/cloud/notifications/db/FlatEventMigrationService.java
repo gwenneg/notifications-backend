@@ -45,7 +45,8 @@ public class FlatEventMigrationService {
                                     return session.createQuery("UPDATE NotificationHistory SET flatEvent = :flatEvent WHERE event = :event")
                                             .setParameter("flatEvent", flatEvent)
                                             .setParameter("event", event)
-                                            .executeUpdate();
+                                            .executeUpdate()
+                                            .call(session::flush);
                                 });
                     })
                     .onItem().ignoreAsUni();
