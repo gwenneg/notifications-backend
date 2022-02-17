@@ -26,7 +26,7 @@ public class FlatEventMigrationService {
     public Uni<Void> migrate() {
         LOGGER.debug("Flat events migration starting...");
         return sessionFactory.withTransaction((session, transaction) -> {
-            return session.createQuery("FROM Event e LEFT JOIN FETCH e.eventType et LEFT JOIN FETCH et.application a LEFT JOIN FETCH a.bundle b", Event.class)
+            return session.createQuery("FROM Event e JOIN FETCH e.eventType et JOIN FETCH et.application a JOIN FETCH a.bundle b", Event.class)
                     .getResultList()
                     .onItem().transformToMulti(Multi.createFrom()::iterable)
                     .onItem().transformToUniAndConcatenate(event -> {
