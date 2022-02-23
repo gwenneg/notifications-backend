@@ -8,6 +8,7 @@ import com.redhat.cloud.notifications.TestLifecycleManager;
 import io.quarkus.cache.Cache;
 import io.quarkus.cache.CacheName;
 import io.quarkus.cache.runtime.caffeine.CaffeineCache;
+import io.quarkus.test.TestTransaction;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
@@ -33,6 +34,7 @@ public class AuthenticationTest {
     Cache cache;
 
     @Test
+    @TestTransaction
     void testEndpointRoles() {
         String tenant = "empty";
         String userName = "testEndpointRoles";

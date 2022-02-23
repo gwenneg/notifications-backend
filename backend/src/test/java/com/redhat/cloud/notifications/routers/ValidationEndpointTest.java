@@ -5,10 +5,10 @@ import com.redhat.cloud.notifications.MockServerConfig;
 import com.redhat.cloud.notifications.TestHelpers;
 import com.redhat.cloud.notifications.db.ApplicationResources;
 import com.redhat.cloud.notifications.models.EventType;
+import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
 import io.restassured.http.Header;
-import io.smallrye.mutiny.Uni;
 import org.junit.jupiter.api.Test;
 
 import javax.persistence.NoResultException;
@@ -30,8 +30,9 @@ class ValidationEndpointTest {
     ApplicationResources appResources;
 
     @Test
+    @TestTransaction
     void shouldReturnNotFoundWhenTripleIsInvalid() {
-        when(appResources.getEventType(eq("blabla"), eq("Notifications"), eq("Any"))).thenReturn(Uni.createFrom().failure(new NoResultException()));
+        when(appResources.getEventType(eq("blabla"), eq("Notifications"), eq("Any"))).thenThrow(new NoResultException());
 
         String identityHeaderValue = TestHelpers.encodeIdentityInfo("empty", "user");
         Header identityHeader = TestHelpers.createIdentityHeader(identityHeaderValue);
@@ -53,11 +54,10 @@ class ValidationEndpointTest {
     }
 
     @Test
+    @TestTransaction
     void shouldReturnStatusOkWhenTripleExists() {
         EventType eventType = new EventType();
-        when(appResources.getEventType(eq("my-bundle"), eq("Policies"), eq("Any"))).thenReturn(
-                Uni.createFrom().item(eventType)
-        );
+        when(appResources.getEventType(eq("my-bundle"), eq("Policies"), eq("Any"))).thenReturn(eventType);
 
         String identityHeaderValue = TestHelpers.encodeIdentityInfo("empty", "user");
         Header identityHeader = TestHelpers.createIdentityHeader(identityHeaderValue);

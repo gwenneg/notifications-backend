@@ -2,17 +2,16 @@ package com.redhat.cloud.notifications.routers;
 
 import com.redhat.cloud.notifications.Json;
 import com.redhat.cloud.notifications.TestLifecycleManager;
-import com.redhat.cloud.notifications.db.DbIsolatedTest;
 import com.redhat.cloud.notifications.models.Application;
 import com.redhat.cloud.notifications.models.BehaviorGroup;
 import com.redhat.cloud.notifications.models.Bundle;
 import com.redhat.cloud.notifications.models.EventType;
 import com.redhat.cloud.notifications.routers.models.RenderEmailTemplateRequest;
 import com.redhat.cloud.notifications.templates.TemplateEngineClient;
+import io.quarkus.test.TestTransaction;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
-import io.smallrye.mutiny.Uni;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.apache.commons.lang3.tuple.Pair;
@@ -44,7 +43,7 @@ import static org.mockito.Mockito.when;
 
 @QuarkusTest
 @QuarkusTestResource(TestLifecycleManager.class)
-public class InternalServiceTest extends DbIsolatedTest {
+public class InternalServiceTest {
 
     /*
      * In the tests below, most JSON responses are verified using JsonObject/JsonArray instead of deserializing these
@@ -63,21 +62,25 @@ public class InternalServiceTest extends DbIsolatedTest {
     TemplateEngineClient templateEngineClient;
 
     @Test
+    @TestTransaction
     void testCreateNullBundle() {
         createBundle(null, BAD_REQUEST);
     }
 
     @Test
+    @TestTransaction
     void testCreateNullApp() {
         createApp(null, BAD_REQUEST);
     }
 
     @Test
+    @TestTransaction
     void testCreateNullEventType() {
         createEventType(null, BAD_REQUEST);
     }
 
     @Test
+    @TestTransaction
     void testCreateInvalidBundle() {
         createBundle(buildBundle(null, "I am valid"), BAD_REQUEST);
         createBundle(buildBundle("i-am-valid", null), BAD_REQUEST);
@@ -85,6 +88,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testCreateInvalidApp() {
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
         createApp(buildApp(null, "i-am-valid", "I am valid"), BAD_REQUEST);
@@ -94,6 +98,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testCreateInvalidEventType() {
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
         String appId = createApp(bundleId, "app-name", "App", OK).get();
@@ -104,6 +109,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testBundleNameUniqueSqlConstraint() {
         // Double bundle creation with the same name.
         String nonUniqueBundleName = "bundle-1-name";
@@ -115,6 +121,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testAppNameUniqueSqlConstraint() {
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
         // Double app creation with the same name.
@@ -127,6 +134,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testEventTypeNameUniqueSqlConstraint() {
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
         String appId = createApp(bundleId, "app-name", "App", OK).get();
@@ -137,24 +145,28 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testGetUnknownBundle() {
         String unknownBundleId = UUID.randomUUID().toString();
         getBundle(unknownBundleId, NOT_USED, NOT_USED, NOT_FOUND);
     }
 
     @Test
+    @TestTransaction
     void testGetUnknownApp() {
         String unknownAppId = UUID.randomUUID().toString();
         getApp(unknownAppId, NOT_USED, NOT_USED, NOT_FOUND);
     }
 
     @Test
+    @TestTransaction
     void testUpdateNullBundle() {
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
         updateBundle(bundleId, null, BAD_REQUEST);
     }
 
     @Test
+    @TestTransaction
     void testUpdateNullApp() {
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
         String appId = createApp(bundleId, "app-name", "App", OK).get();
@@ -162,12 +174,14 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testUpdateUnknownBundle() {
         String unknownBundleId = UUID.randomUUID().toString();
         updateBundle(unknownBundleId, NOT_USED, NOT_USED, NOT_FOUND);
     }
 
     @Test
+    @TestTransaction
     void testUpdateUnknownApp() {
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
         String unknownAppId = UUID.randomUUID().toString();
@@ -175,30 +189,35 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testAddAppToUnknownBundle() {
         String unknownBundleId = UUID.randomUUID().toString();
         createApp(unknownBundleId, NOT_USED, NOT_USED, NOT_FOUND);
     }
 
     @Test
+    @TestTransaction
     void testAddEventTypeToUnknownApp() {
         String unknownAppId = UUID.randomUUID().toString();
         createEventType(unknownAppId, NOT_USED, NOT_USED, NOT_USED, NOT_FOUND);
     }
 
     @Test
+    @TestTransaction
     void testGetAppsFromUnknownBundle() {
         String unknownBundleId = UUID.randomUUID().toString();
         getApps(unknownBundleId, NOT_FOUND, 0);
     }
 
     @Test
+    @TestTransaction
     void testGetEventTypesFromUnknownApp() {
         String unknownAppId = UUID.randomUUID().toString();
         getEventTypes(unknownAppId, NOT_FOUND, 0);
     }
 
     @Test
+    @TestTransaction
     void testCreateAndGetAndUpdateAndDeleteBundle() {
         // First, we create two bundles with different names. Only the second one will be used after that.
         createBundle("bundle-1-name", "Bundle 1", OK).get();
@@ -217,6 +236,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testCreateAndGetAndUpdateAndDeleteApp() {
         // We need to persist a bundle for this test.
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
@@ -244,6 +264,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testCreateAndGetAndUpdateAndDeleteEventType() {
         // We need to persist a bundle and an app for this test.
         String bundleId = createBundle("bundle-name", "Bundle", OK).get();
@@ -270,6 +291,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testDefaultBehaviorGroupCRUD() {
         // We need to persist a bundle.
         String bundleId = createBundle("dbg-bundle-name", "Bundle", OK).get();
@@ -313,6 +335,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testInvalidEmailTemplateRendering() {
         RenderEmailTemplateRequest request = new RenderEmailTemplateRequest();
         request.setPayload("I am invalid!");
@@ -322,7 +345,7 @@ public class InternalServiceTest extends DbIsolatedTest {
         JsonObject exceptionMessage = new JsonObject();
         exceptionMessage.put("message", "Action parsing failed for payload: I am invalid!");
         BadRequestException badRequest = new BadRequestException(exceptionMessage.toString());
-        when(templateEngineClient.render(Mockito.any(RenderEmailTemplateRequest.class))).thenReturn(Uni.createFrom().failure(badRequest));
+        when(templateEngineClient.render(Mockito.any(RenderEmailTemplateRequest.class))).thenThrow(badRequest);
 
         String responseBody = given()
                 .basePath(API_INTERNAL)
@@ -339,6 +362,7 @@ public class InternalServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     void testVersion() {
         String responseBody = given()
                 .basePath(API_INTERNAL)

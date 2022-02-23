@@ -5,10 +5,10 @@ import com.redhat.cloud.notifications.MockServerClientConfig;
 import com.redhat.cloud.notifications.MockServerConfig;
 import com.redhat.cloud.notifications.TestHelpers;
 import com.redhat.cloud.notifications.TestLifecycleManager;
-import com.redhat.cloud.notifications.db.DbIsolatedTest;
 import com.redhat.cloud.notifications.models.CurrentStatus;
 import com.redhat.cloud.notifications.models.Status;
 import io.quarkus.cache.CacheInvalidate;
+import io.quarkus.test.TestTransaction;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.Header;
@@ -30,12 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 @QuarkusTestResource(TestLifecycleManager.class)
-public class StatusServiceTest extends DbIsolatedTest {
+public class StatusServiceTest {
 
     @MockServerConfig
     MockServerClientConfig mockServerConfig;
 
     @Test
+    @TestTransaction
     public void testValidCurrentStatus() {
         String identityHeaderValue = TestHelpers.encodeIdentityInfo("tenant", "username");
         Header identityHeader = TestHelpers.createIdentityHeader(identityHeaderValue);
@@ -80,6 +81,7 @@ public class StatusServiceTest extends DbIsolatedTest {
     }
 
     @Test
+    @TestTransaction
     public void testInvalidCurrentStatus() {
         // Null values.
         putCurrentStatus(MAINTENANCE, null, LocalDateTime.now(), 400);

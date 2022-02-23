@@ -1,5 +1,6 @@
 package com.redhat.cloud.notifications.routers;
 
+import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class JsonParseExceptionMapperTest {
 
     @Test
+    @TestTransaction
     public void testCreateInvalidEventType() {
         String responseBody = given()
                 .contentType(JSON)
