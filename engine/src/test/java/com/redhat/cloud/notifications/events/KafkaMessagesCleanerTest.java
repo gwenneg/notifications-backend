@@ -4,11 +4,11 @@ import com.redhat.cloud.notifications.TestLifecycleManager;
 import com.redhat.cloud.notifications.models.KafkaMessage;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.smallrye.mutiny.Uni;
-import org.hibernate.reactive.mutiny.Mutiny;
+import org.hibernate.StatelessSession;
 import org.junit.jupiter.api.Test;
 
 import javax.inject.Inject;
+import javax.transaction.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -27,39 +27,33 @@ public class KafkaMessagesCleanerTest {
      * a stateless session.
      */
     @Inject
-    Mutiny.SessionFactory sessionFactory;
+    StatelessSession statelessSession;
 
     @Test
+    @Transactional
     void testPostgresStoredProcedure() {
-        sessionFactory.withStatelessSession(statelessSession -> deleteAllKafkaMessages()
-                .chain(() -> createKafkaMessage(now().minus(Duration.ofHours(13L))))
-                .chain(() -> createKafkaMessage(now().minus(Duration.ofDays(2L))))
-                .chain(() -> count())
-                .invoke(count -> assertEquals(2L, count))
-                .chain(() -> statelessSession.createNativeQuery("CALL cleanKafkaMessagesIds()").executeUpdate())
-                .chain(() -> count())
-                .invoke(count -> assertEquals(1L, count))
-        ).await().indefinitely();
+        deleteAllKafkaMessages();
+        createKafkaMessage(now().minus(Duration.ofHours(13L)));
+        createKafkaMessage(now().minus(Duration.ofDays(2L)));
+        assertEquals(2L, count());
+        statelessSession.createNativeQuery("CALL cleanKafkaMessagesIds()").executeUpdate();
+        assertEquals(1L, count());
     }
 
-    private Uni<Integer> deleteAllKafkaMessages() {
-        return sessionFactory.withStatelessSession(statelessSession ->
-                statelessSession.createQuery("DELETE FROM KafkaMessage")
-                        .executeUpdate()
-        );
+    private Integer deleteAllKafkaMessages() {
+        return statelessSession.createQuery("DELETE FROM KafkaMessage")
+                .executeUpdate();
     }
 
-    private Uni<Void> createKafkaMessage(LocalDateTime created) {
+    private void createKafkaMessage(LocalDateTime created) {
         KafkaMessage kafkaMessage = new KafkaMessage(UUID.randomUUID());
         kafkaMessage.setCreated(created);
-        return sessionFactory.withStatelessSession(statelessSession -> statelessSession.insert(kafkaMessage));
+        statelessSession.insert(kafkaMessage);
     }
 
-    private Uni<Long> count() {
-        return sessionFactory.withStatelessSession(statelessSession ->
-                statelessSession.createQuery("SELECT COUNT(*) FROM KafkaMessage", Long.class)
-                        .getSingleResult()
-        );
+    private Long count() {
+        return statelessSession.createQuery("SELECT COUNT(*) FROM KafkaMessage", Long.class)
+                .getSingleResult();
     }
 
     private static LocalDateTime now() {

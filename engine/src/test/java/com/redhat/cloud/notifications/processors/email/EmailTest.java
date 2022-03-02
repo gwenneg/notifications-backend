@@ -19,12 +19,10 @@ import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
 import io.quarkus.test.junit.mockito.InjectSpy;
-import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.Uni;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
-import org.hibernate.reactive.mutiny.Mutiny;
+import org.hibernate.StatelessSession;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -62,7 +60,7 @@ public class EmailTest {
     EmailSubscriptionTypeProcessor emailProcessor;
 
     @Inject
-    Mutiny.SessionFactory sessionFactory;
+    StatelessSession statelessSession;
 
     @InjectMock
     @RestClient
@@ -106,83 +104,79 @@ public class EmailTest {
         String bundle = "rhel";
         String application = "policies";
 
-        Multi.createFrom().items(usernames)
-                .onItem().transformToUniAndConcatenate(username -> subscribe(tenant, username, bundle, application))
-                .onItem().ignoreAsUni()
-                .chain(() -> {
-                    final List<String> bodyRequests = new ArrayList<>();
+        for (String username : usernames) {
+            subscribe(tenant, username, bundle, application);
+            final List<String> bodyRequests = new ArrayList<>();
 
-                    ExpectationResponseCallback verifyEmptyRequest = req -> {
-                        assertEquals(BOP_TOKEN, req.getHeader(EmailSender.BOP_APITOKEN_HEADER).get(0));
-                        assertEquals(BOP_CLIENT_ID, req.getHeader(EmailSender.BOP_CLIENT_ID_HEADER).get(0));
-                        assertEquals(BOP_ENV, req.getHeader(EmailSender.BOP_ENV_HEADER).get(0));
-                        bodyRequests.add(req.getBodyAsString());
-                        return response().withStatusCode(200);
-                    };
+            ExpectationResponseCallback verifyEmptyRequest = req -> {
+                assertEquals(BOP_TOKEN, req.getHeader(EmailSender.BOP_APITOKEN_HEADER).get(0));
+                assertEquals(BOP_CLIENT_ID, req.getHeader(EmailSender.BOP_CLIENT_ID_HEADER).get(0));
+                assertEquals(BOP_ENV, req.getHeader(EmailSender.BOP_ENV_HEADER).get(0));
+                bodyRequests.add(req.getBodyAsString());
+                return response().withStatusCode(200);
+            };
 
-                    HttpRequest postReq = getMockHttpRequest(verifyEmptyRequest);
+            HttpRequest postReq = getMockHttpRequest(verifyEmptyRequest);
 
-                    Action emailActionMessage = TestHelpers.createPoliciesAction(tenant, bundle, application, "My test machine");
+            Action emailActionMessage = TestHelpers.createPoliciesAction(tenant, bundle, application, "My test machine");
 
-                    Event event = new Event();
-                    event.setAction(emailActionMessage);
+            Event event = new Event();
+            event.setAction(emailActionMessage);
 
-                    EmailSubscriptionProperties properties = new EmailSubscriptionProperties();
+            EmailSubscriptionProperties properties = new EmailSubscriptionProperties();
 
-                    Endpoint ep = new Endpoint();
-                    ep.setType(EndpointType.EMAIL_SUBSCRIPTION);
-                    ep.setName("positive feeling");
-                    ep.setDescription("needle in the haystack");
-                    ep.setEnabled(true);
-                    ep.setProperties(properties);
+            Endpoint ep = new Endpoint();
+            ep.setType(EndpointType.EMAIL_SUBSCRIPTION);
+            ep.setName("positive feeling");
+            ep.setDescription("needle in the haystack");
+            ep.setEnabled(true);
+            ep.setProperties(properties);
 
-                    return emailProcessor.process(event, List.of(ep))
-                            .onFailure().invoke(e -> {
-                                e.printStackTrace();
-                                fail(e);
-                            })
-                            .collect().asList()
-                            .eventually(() -> {
-                                // Remove expectations
-                                mockServerConfig.getMockServerClient().clear(postReq);
-                            })
-                            .invoke(historyEntries -> {
+            try {
+                List<NotificationHistory> historyEntries = emailProcessor.process(event, List.of(ep));
 
-                                NotificationHistory history = historyEntries.get(0);
-                                assertTrue(history.isInvocationResult());
+                NotificationHistory history = historyEntries.get(0);
+                assertTrue(history.isInvocationResult());
 
-                                assertEquals(3, bodyRequests.size());
-                                List<JsonObject> emailRequests = emailRequestIsOK(bodyRequests, usernames);
+                assertEquals(3, bodyRequests.size());
+                List<JsonObject> emailRequests = emailRequestIsOK(bodyRequests, usernames);
 
-                                for (int i = 0; i < usernames.length; ++i) {
-                                    JsonObject body = emailRequests.get(i);
-                                    JsonArray emails = body.getJsonArray("emails");
-                                    assertNotNull(emails);
-                                    assertEquals(1, emails.size());
-                                    JsonObject firstEmail = emails.getJsonObject(0);
-                                    JsonArray recipients = firstEmail.getJsonArray("recipients");
-                                    assertEquals(1, recipients.size());
-                                    assertEquals(usernames[i], recipients.getString(0));
+                for (int i = 0; i < usernames.length; ++i) {
+                    JsonObject body = emailRequests.get(i);
+                    JsonArray emails = body.getJsonArray("emails");
+                    assertNotNull(emails);
+                    assertEquals(1, emails.size());
+                    JsonObject firstEmail = emails.getJsonObject(0);
+                    JsonArray recipients = firstEmail.getJsonArray("recipients");
+                    assertEquals(1, recipients.size());
+                    assertEquals(usernames[i], recipients.getString(0));
 
-                                    JsonArray bccList = firstEmail.getJsonArray("bccList");
-                                    assertEquals(0, bccList.size());
+                    JsonArray bccList = firstEmail.getJsonArray("bccList");
+                    assertEquals(0, bccList.size());
 
-                                    String bodyRequest = body.toString();
+                    String bodyRequest = body.toString();
 
-                                    assertTrue(bodyRequest.contains(TestHelpers.policyId1), "Body should contain policy id" + TestHelpers.policyId1);
-                                    assertTrue(bodyRequest.contains(TestHelpers.policyName1), "Body should contain policy name" + TestHelpers.policyName1);
+                    assertTrue(bodyRequest.contains(TestHelpers.policyId1), "Body should contain policy id" + TestHelpers.policyId1);
+                    assertTrue(bodyRequest.contains(TestHelpers.policyName1), "Body should contain policy name" + TestHelpers.policyName1);
 
-                                    assertTrue(bodyRequest.contains(TestHelpers.policyId2), "Body should contain policy id" + TestHelpers.policyId2);
-                                    assertTrue(bodyRequest.contains(TestHelpers.policyName2), "Body should contain policy name" + TestHelpers.policyName2);
+                    assertTrue(bodyRequest.contains(TestHelpers.policyId2), "Body should contain policy id" + TestHelpers.policyId2);
+                    assertTrue(bodyRequest.contains(TestHelpers.policyName2), "Body should contain policy name" + TestHelpers.policyName2);
 
-                                    // Display name
-                                    assertTrue(bodyRequest.contains("My test machine"), "Body should contain the display_name");
+                    // Display name
+                    assertTrue(bodyRequest.contains("My test machine"), "Body should contain the display_name");
 
-                                    // Formatted date
-                                    assertTrue(bodyRequest.contains("03 Aug 2020 15:22 UTC"));
-                                }
-                            });
-                }).chain(() -> clearSubscriptions()).await().indefinitely();
+                    // Formatted date
+                    assertTrue(bodyRequest.contains("03 Aug 2020 15:22 UTC"));
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                fail(e);
+            } finally {
+                // Remove expectations
+                mockServerConfig.getMockServerClient().clear(postReq);
+            }
+            clearSubscriptions();
+        }
     }
 
     @Test
@@ -193,77 +187,73 @@ public class EmailTest {
         String bundle = "rhel";
         String application = "policies";
 
-        sessionFactory.withSession(session -> Multi.createFrom().items(usernames)
-                .onItem().transformToUniAndConcatenate(username -> subscribe(tenant, username, bundle, application))
-                .onItem().ignoreAsUni()
-                .chain(() -> {
-                    final List<String> bodyRequests = new ArrayList<>();
+        for (String username : usernames) {
+            subscribe(tenant, username, bundle, application);
 
-                    ExpectationResponseCallback verifyEmptyRequest = req -> {
-                        assertEquals(BOP_TOKEN, req.getHeader(EmailSender.BOP_APITOKEN_HEADER).get(0));
-                        assertEquals(BOP_CLIENT_ID, req.getHeader(EmailSender.BOP_CLIENT_ID_HEADER).get(0));
-                        assertEquals(BOP_ENV, req.getHeader(EmailSender.BOP_ENV_HEADER).get(0));
-                        bodyRequests.add(req.getBodyAsString());
-                        return response().withStatusCode(200);
-                    };
+            final List<String> bodyRequests = new ArrayList<>();
 
-                    HttpRequest postReq = getMockHttpRequest(verifyEmptyRequest);
+            ExpectationResponseCallback verifyEmptyRequest = req -> {
+                assertEquals(BOP_TOKEN, req.getHeader(EmailSender.BOP_APITOKEN_HEADER).get(0));
+                assertEquals(BOP_CLIENT_ID, req.getHeader(EmailSender.BOP_CLIENT_ID_HEADER).get(0));
+                assertEquals(BOP_ENV, req.getHeader(EmailSender.BOP_ENV_HEADER).get(0));
+                bodyRequests.add(req.getBodyAsString());
+                return response().withStatusCode(200);
+            };
 
-                    Action emailActionMessage = new Action();
-                    emailActionMessage.setBundle(bundle);
-                    emailActionMessage.setApplication(application);
-                    emailActionMessage.setTimestamp(LocalDateTime.of(2020, 10, 3, 15, 22, 13, 25));
-                    emailActionMessage.setEventType(TestHelpers.eventType);
-                    emailActionMessage.setRecipients(List.of());
+            HttpRequest postReq = getMockHttpRequest(verifyEmptyRequest);
 
-                    emailActionMessage.setContext(Map.of(
-                            "inventory_id-wrong", "host-01",
-                            "system_check_in-wrong", "2020-08-03T15:22:42.199046",
-                            "display_name-wrong", "My test machine",
-                            "tags-what?", List.of()
-                    ));
-                    emailActionMessage.setEvents(List.of(
-                            com.redhat.cloud.notifications.ingress.Event.newBuilder()
-                                    .setMetadataBuilder(Metadata.newBuilder())
-                                    .setPayload(Map.of(
-                                            "foo", "bar"
-                                    ))
-                                    .build()
-                    ));
+            Action emailActionMessage = new Action();
+            emailActionMessage.setBundle(bundle);
+            emailActionMessage.setApplication(application);
+            emailActionMessage.setTimestamp(LocalDateTime.of(2020, 10, 3, 15, 22, 13, 25));
+            emailActionMessage.setEventType(TestHelpers.eventType);
+            emailActionMessage.setRecipients(List.of());
+            emailActionMessage.setContext(Map.of(
+                    "inventory_id-wrong", "host-01",
+                    "system_check_in-wrong", "2020-08-03T15:22:42.199046",
+                    "display_name-wrong", "My test machine",
+                    "tags-what?", List.of()
+            ));
+            emailActionMessage.setEvents(List.of(
+                    com.redhat.cloud.notifications.ingress.Event.newBuilder()
+                            .setMetadataBuilder(Metadata.newBuilder())
+                            .setPayload(Map.of(
+                                    "foo", "bar"
+                            ))
+                            .build()
+            ));
 
-                    emailActionMessage.setAccountId(tenant);
+            emailActionMessage.setAccountId(tenant);
 
-                    Event event = new Event();
-                    event.setAction(emailActionMessage);
+            Event event = new Event();
+            event.setAction(emailActionMessage);
 
-                    EmailSubscriptionProperties properties = new EmailSubscriptionProperties();
+            EmailSubscriptionProperties properties = new EmailSubscriptionProperties();
 
-                    Endpoint ep = new Endpoint();
-                    ep.setType(EndpointType.EMAIL_SUBSCRIPTION);
-                    ep.setName("positive feeling");
-                    ep.setDescription("needle in the haystack");
-                    ep.setEnabled(true);
-                    ep.setProperties(properties);
+            Endpoint ep = new Endpoint();
+            ep.setType(EndpointType.EMAIL_SUBSCRIPTION);
+            ep.setName("positive feeling");
+            ep.setDescription("needle in the haystack");
+            ep.setEnabled(true);
+            ep.setProperties(properties);
 
-                    return emailProcessor.process(event, List.of(ep))
-                            .onFailure().invoke(e -> {
-                                e.printStackTrace();
-                                fail(e);
-                            })
-                            .collect().asList()
-                            .eventually(() -> {
-                                // Remove expectations
-                                mockServerConfig.getMockServerClient().clear(postReq);
-                            })
-                            .invoke(historyEntries -> {
-                                // The processor returns a null history value but Multi does not support null values so the resulting Multi is empty.
-                                assertTrue(historyEntries.isEmpty());
+            try {
+                List<NotificationHistory> historyEntries = emailProcessor.process(event, List.of(ep));
 
-                                // No email, invalid payload
-                                assertEquals(0, bodyRequests.size());
-                            });
-                })
-        ).chain(() -> clearSubscriptions()).await().indefinitely();
+                // The processor returns a null history value but Multi does not support null values so the resulting Multi is empty.
+                assertTrue(historyEntries.isEmpty());
+
+                // No email, invalid payload
+                assertEquals(0, bodyRequests.size());
+            } catch (Exception e) {
+                e.printStackTrace();
+                fail(e);
+            } finally {
+                // Remove expectations
+                mockServerConfig.getMockServerClient().clear(postReq);
+            }
+        }
+        clearSubscriptions();
     }
 
     private String usernameOfRequest(String request, String[] users) {
@@ -326,7 +316,7 @@ public class EmailTest {
             this.expectedAdminsOnly = expectedAdminsOnly;
         }
 
-        Uni<Page<RbacUser>> mockedUserAnswer(int offset, int limit, boolean adminsOnly) {
+        Page<RbacUser> mockedUserAnswer(int offset, int limit, boolean adminsOnly) {
 
             Assertions.assertEquals(expectedAdminsOnly, adminsOnly);
 
@@ -349,32 +339,27 @@ public class EmailTest {
             usersPage.setLinks(new HashMap<>());
             usersPage.setData(users);
 
-            return Uni.createFrom().item(usersPage);
+            return usersPage;
         }
     }
 
-    private Uni<Boolean> subscribe(String accountNumber, String username, String bundleName, String applicationName) {
+    private boolean subscribe(String accountNumber, String username, String bundleName, String applicationName) {
         String query = "INSERT INTO endpoint_email_subscriptions(account_id, user_id, application_id, subscription_type) " +
                 "SELECT :accountId, :userId, a.id, :subscriptionType " +
                 "FROM applications a, bundles b WHERE a.bundle_id = b.id AND a.name = :applicationName AND b.name = :bundleName " +
                 "ON CONFLICT (account_id, user_id, application_id, subscription_type) DO NOTHING";
-        return sessionFactory.withStatelessSession(statelessSession -> {
-            return statelessSession.createNativeQuery(query)
-                    .setParameter("accountId", accountNumber)
-                    .setParameter("userId", username)
-                    .setParameter("bundleName", bundleName)
-                    .setParameter("applicationName", applicationName)
-                    .setParameter("subscriptionType", INSTANT.name())
-                    .executeUpdate()
-                    .replaceWith(Boolean.TRUE);
-        });
+        statelessSession.createNativeQuery(query)
+                .setParameter("accountId", accountNumber)
+                .setParameter("userId", username)
+                .setParameter("bundleName", bundleName)
+                .setParameter("applicationName", applicationName)
+                .setParameter("subscriptionType", INSTANT.name())
+                .executeUpdate();
+        return true;
     }
 
-    private Uni<Void> clearSubscriptions() {
-        return sessionFactory.withStatelessSession(statelessSession -> {
-            return statelessSession.createNativeQuery("DELETE FROM endpoint_email_subscriptions")
-                    .executeUpdate()
-                    .replaceWithVoid();
-        });
+    private void clearSubscriptions() {
+        statelessSession.createNativeQuery("DELETE FROM endpoint_email_subscriptions")
+                .executeUpdate();
     }
 }

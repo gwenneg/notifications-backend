@@ -50,6 +50,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -289,9 +290,7 @@ public class EventConsumerTest {
         EventType eventType = new EventType();
         eventType.setDisplayName("Event type");
         eventType.setApplication(app);
-        when(eventTypeRepository.getEventType(eq(BUNDLE), eq(APP), eq(EVENT_TYPE))).thenReturn(
-                Uni.createFrom().item(eventType)
-        );
+        when(eventTypeRepository.getEventType(eq(BUNDLE), eq(APP), eq(EVENT_TYPE))).thenReturn(eventType);
         when(eventRepository.create(any(Event.class))).thenAnswer(invocation -> {
             Event event = invocation.getArgument(0);
             return Uni.createFrom().item(event);
@@ -300,15 +299,14 @@ public class EventConsumerTest {
     }
 
     private void mockGetUnknownEventType() {
-        when(eventTypeRepository.getEventType(eq(BUNDLE), eq(APP), eq(EVENT_TYPE))).thenReturn(
-                Uni.createFrom().failure(() -> new NoResultException("I am a forced exception!"))
+        when(eventTypeRepository.getEventType(eq(BUNDLE), eq(APP), eq(EVENT_TYPE))).thenThrow(
+                new NoResultException("I am a forced exception!")
         );
     }
 
     private void mockProcessingFailure() {
-        when(endpointProcessor.process(any(Event.class))).thenReturn(
-                Uni.createFrom().failure(() -> new RuntimeException("I am a forced exception!"))
-        );
+        doThrow(new RuntimeException("I am a forced exception!"))
+                .when(endpointProcessor).process(any(Event.class));
     }
 
     private void verifyExactlyOneProcessing(EventType eventType, String payload, Action action) {

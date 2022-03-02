@@ -12,14 +12,13 @@ import com.redhat.cloud.notifications.transformers.BaseTransformer;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.channel.ConnectTimeoutException;
-import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.Uni;
 import io.vertx.core.VertxException;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.impl.HttpRequestImpl;
 import io.vertx.mutiny.core.buffer.Buffer;
 import io.vertx.mutiny.ext.web.client.HttpRequest;
+import io.vertx.mutiny.ext.web.client.HttpResponse;
 import io.vertx.mutiny.ext.web.client.WebClient;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -31,6 +30,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static com.redhat.cloud.notifications.models.NotificationHistory.getHistoryStub;
 
@@ -72,15 +72,16 @@ public class WebhookTypeProcessor implements EndpointTypeProcessor {
     }
 
     @Override
-    public Multi<NotificationHistory> process(Event event, List<Endpoint> endpoints) {
-        return Multi.createFrom().iterable(endpoints)
-                .onItem().transformToUniAndConcatenate(endpoint -> {
+    public List<NotificationHistory> process(Event event, List<Endpoint> endpoints) {
+        return endpoints.stream()
+                .map(endpoint -> {
                     Notification notification = new Notification(event, endpoint);
                     return process(notification);
-                });
+                })
+                .collect(Collectors.toList());
     }
 
-    private Uni<NotificationHistory> process(Notification item) {
+    private NotificationHistory process(Notification item) {
         processedCount.increment();
         Endpoint endpoint = item.getEndpoint();
         WebhookProperties properties = endpoint.getProperties(WebhookProperties.class);
@@ -96,7 +97,7 @@ public class WebhookTypeProcessor implements EndpointTypeProcessor {
             req.basicAuthentication(properties.getBasicAuthentication().getUsername(), properties.getBasicAuthentication().getPassword());
         }
 
-        Uni<JsonObject> payload = transformer.transform(item.getEvent().getAction());
+        JsonObject payload = transformer.transform(item.getEvent().getAction());
 
         return doHttpRequest(item, req, payload);
     }
@@ -109,72 +110,69 @@ public class WebhookTypeProcessor implements EndpointTypeProcessor {
         }
     }
 
-    public Uni<NotificationHistory> doHttpRequest(Notification item, HttpRequest<Buffer> req, Uni<JsonObject> payload) {
+    public NotificationHistory doHttpRequest(Notification item, HttpRequest<Buffer> req, JsonObject payload) {
         final long startTime = System.currentTimeMillis();
 
-        return payload.onItem()
-                .transformToUni(json -> req.sendJsonObject(json)
-                        .onItem().transform(resp -> {
-                            NotificationHistory history = buildNotificationHistory(item, startTime);
+        // TODO NOTIF-488 retry
+        try {
+            // TODO NOTIF-488 remove await?
+            HttpResponse<Buffer> resp = req.sendJsonObject(payload).await().indefinitely();
+            NotificationHistory history = buildNotificationHistory(item, startTime);
 
-                            HttpRequestImpl<Buffer> reqImpl = (HttpRequestImpl<Buffer>) req.getDelegate();
+            HttpRequestImpl<Buffer> reqImpl = (HttpRequestImpl<Buffer>) req.getDelegate();
 
-                            boolean serverError = false;
-                            if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
-                                // Accepted
-                                LOGGER.debugf("Webhook request to %s was successful: %d", reqImpl.host(), resp.statusCode());
-                                history.setInvocationResult(true);
-                            } else if (resp.statusCode() >= 500) {
-                                // Temporary error, allow retry
-                                serverError = true;
-                                LOGGER.debugf("Webhook request to %s failed: %d %s", reqImpl.host(), resp.statusCode(), resp.statusMessage());
-                                history.setInvocationResult(false);
-                            } else {
-                                // Disable the target endpoint, it's not working correctly for us (such as 400)
-                                // must be manually re-enabled
-                                // Redirects etc should have been followed by the vertx (test this)
-                                LOGGER.debugf("Webhook request to %s failed: %d %s %s", reqImpl.host(), resp.statusCode(), resp.statusMessage(), json);
-                                history.setInvocationResult(false);
-                            }
+            boolean serverError = false;
+            if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
+                // Accepted
+                LOGGER.debugf("Webhook request to %s was successful: %d", reqImpl.host(), resp.statusCode());
+                history.setInvocationResult(true);
+            } else if (resp.statusCode() >= 500) {
+                // Temporary error, allow retry
+                serverError = true;
+                LOGGER.debugf("Webhook request to %s failed: %d %s", reqImpl.host(), resp.statusCode(), resp.statusMessage());
+                history.setInvocationResult(false);
+            } else {
+                // Disable the target endpoint, it's not working correctly for us (such as 400)
+                // must be manually re-enabled
+                // Redirects etc should have been followed by the vertx (test this)
+                LOGGER.debugf("Webhook request to %s failed: %d %s %s", reqImpl.host(), resp.statusCode(), resp.statusMessage(), payload);
+                history.setInvocationResult(false);
+            }
 
-                            if (!history.isInvocationResult()) {
-                                JsonObject details = new JsonObject();
-                                details.put("url", getCallUrl(reqImpl));
-                                details.put("method", reqImpl.method().name());
-                                details.put("code", resp.statusCode());
-                                // This isn't async body reading, lets hope vertx handles it async underneath before calling this apply method
-                                details.put("response_body", resp.bodyAsString());
-                                history.setDetails(details.getMap());
-                            }
+            if (!history.isInvocationResult()) {
+                JsonObject details = new JsonObject();
+                details.put("url", getCallUrl(reqImpl));
+                details.put("method", reqImpl.method().name());
+                details.put("code", resp.statusCode());
+                // This isn't async body reading, lets hope vertx handles it async underneath before calling this apply method
+                details.put("response_body", resp.bodyAsString());
+                history.setDetails(details.getMap());
+            }
 
-                            if (serverError) {
-                                throw new ServerErrorException(history);
-                            }
-                            return history;
-                        })
-                        .onFailure(this::shouldRetry)
-                        .retry().withBackOff(initialRetryBackOff, maxRetryBackOff).atMost(maxRetryAttempts)
-                        .onFailure().recoverWithItem(t -> {
+            if (serverError) {
+                throw new ServerErrorException(history);
+            }
+            return history;
 
-                            if (t instanceof ServerErrorException) {
-                                return ((ServerErrorException) t).getNotificationHistory();
-                            }
+        } catch (Exception e) {
+            if (e instanceof ServerErrorException) {
+                return ((ServerErrorException) e).getNotificationHistory();
+            }
 
-                            NotificationHistory history = buildNotificationHistory(item, startTime);
+            NotificationHistory history = buildNotificationHistory(item, startTime);
 
-                            HttpRequestImpl<Buffer> reqImpl = (HttpRequestImpl<Buffer>) req.getDelegate();
+            HttpRequestImpl<Buffer> reqImpl = (HttpRequestImpl<Buffer>) req.getDelegate();
 
-                            LOGGER.debugf("Failed: %s", t.getMessage());
+            LOGGER.debugf("Failed: %s", e.getMessage());
 
-                            // TODO Duplicate code with the error return code part
-                            JsonObject details = new JsonObject();
-                            details.put("url", reqImpl.uri());
-                            details.put("method", reqImpl.method());
-                            details.put("error_message", t.getMessage()); // TODO This message isn't always the most descriptive..
-                            history.setDetails(details.getMap());
-                            return history;
-                        })
-                );
+            // TODO Duplicate code with the error return code part
+            JsonObject details = new JsonObject();
+            details.put("url", reqImpl.uri());
+            details.put("method", reqImpl.method());
+            details.put("error_message", e.getMessage()); // TODO This message isn't always the most descriptive..
+            history.setDetails(details.getMap());
+            return history;
+        }
     }
 
     private String getCallUrl(HttpRequestImpl<Buffer> reqImpl) {

@@ -1,6 +1,9 @@
 package com.redhat.cloud.notifications.processors.email.aggregators;
 
 import com.redhat.cloud.notifications.DriftTestHelpers;
+import com.redhat.cloud.notifications.TestLifecycleManager;
+import io.quarkus.test.common.QuarkusTestResource;
+import io.quarkus.test.junit.QuarkusTest;
 import io.vertx.core.json.JsonObject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+@QuarkusTest
+@QuarkusTestResource(TestLifecycleManager.class)
 class DriftEmailPayloadAggregatorTest {
 
     private DriftEmailPayloadAggregator aggregator;

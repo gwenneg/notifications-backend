@@ -7,11 +7,11 @@ import com.redhat.cloud.notifications.models.Event;
 import com.redhat.cloud.notifications.models.EventType;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.smallrye.mutiny.Uni;
-import org.hibernate.reactive.mutiny.Mutiny;
+import org.hibernate.StatelessSession;
 import org.junit.jupiter.api.Test;
 
 import javax.inject.Inject;
+import javax.transaction.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -29,30 +29,26 @@ public class EventLogCleanerTest {
      * session.
      */
     @Inject
-    Mutiny.SessionFactory sessionFactory;
+    StatelessSession statelessSession;
 
     @Test
+    @Transactional
     void testPostgresStoredProcedure() {
-        sessionFactory.withStatelessSession(statelessSession -> deleteAllEvents()
-                .chain(() -> createEventType())
-                .call(eventType -> createEvent(eventType, now().minus(Duration.ofHours(1L))))
-                .call(eventType -> createEvent(eventType, now().minus(Duration.ofDays(62L))))
-                .chain(() -> count())
-                .invoke(count -> assertEquals(2L, count))
-                .chain(() -> statelessSession.createNativeQuery("CALL cleanEventLog()").executeUpdate())
-                .chain(() -> count())
-                .invoke(count -> assertEquals(1L, count))
-        ).await().indefinitely();
+        deleteAllEvents();
+        EventType eventType = createEventType();
+        createEvent(eventType, now().minus(Duration.ofHours(1L)));
+        createEvent(eventType, now().minus(Duration.ofDays(62L)));
+        assertEquals(2L, count());
+        statelessSession.createNativeQuery("CALL cleanEventLog()").executeUpdate();
+        assertEquals(1L, count());
     }
 
-    private Uni<Integer> deleteAllEvents() {
-        return sessionFactory.withStatelessSession(statelessSession ->
-                statelessSession.createQuery("DELETE FROM Event")
-                    .executeUpdate()
-        );
+    private Integer deleteAllEvents() {
+        return statelessSession.createQuery("DELETE FROM Event")
+                .executeUpdate();
     }
 
-    private Uni<EventType> createEventType() {
+    private EventType createEventType() {
         Bundle bundle = new Bundle();
         bundle.setName("bundle");
         bundle.setDisplayName("Bundle");
@@ -69,25 +65,21 @@ public class EventLogCleanerTest {
         eventType.setName("event-type");
         eventType.setDisplayName("Event type");
 
-        return sessionFactory.withStatelessSession(statelessSession ->
-                statelessSession.insert(bundle)
-                        .call(() -> statelessSession.insert(app))
-                        .call(() -> statelessSession.insert(eventType))
-                        .replaceWith(eventType)
-        );
+        statelessSession.insert(bundle);
+        statelessSession.insert(app);
+        statelessSession.insert(eventType);
+        return eventType;
     }
 
-    private Uni<Void> createEvent(EventType eventType, LocalDateTime created) {
+    private void createEvent(EventType eventType, LocalDateTime created) {
         Event event = new Event("account-id", eventType);
         event.setCreated(created);
-        return sessionFactory.withStatelessSession(statelessSession -> statelessSession.insert(event));
+        statelessSession.insert(event);
     }
 
-    private Uni<Long> count() {
-        return sessionFactory.withStatelessSession(statelessSession ->
-                statelessSession.createQuery("SELECT COUNT(*) FROM Event", Long.class)
-                        .getSingleResult()
-        );
+    private Long count() {
+        return statelessSession.createQuery("SELECT COUNT(*) FROM Event", Long.class)
+                .getSingleResult();
     }
 
     private static LocalDateTime now() {
