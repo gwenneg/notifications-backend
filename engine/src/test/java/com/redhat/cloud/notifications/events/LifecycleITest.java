@@ -108,10 +108,10 @@ public class LifecycleITest {
     EmailSender emailSender;
 
     @Inject
-    EndpointRepository endpointRepository;
+    EntityManager entityManager;
 
     @Inject
-    EntityManager entityManager;
+    EndpointRepository endpointRepository;
 
     @Test
     void test() {
