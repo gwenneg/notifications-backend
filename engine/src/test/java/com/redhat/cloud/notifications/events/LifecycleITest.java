@@ -120,134 +120,136 @@ public class LifecycleITest {
         setupEmailMock(accountId, username);
 
         // First, we need a bundle, an app and an event type. Let's create them!
-        Bundle bundle = createBundle();
-        Application app = createApp(bundle);
-        EventType eventType = createEventType(app);
+        UUID bundleId = createBundle();
+        UUID appId = createApp(bundleId);
+        UUID eventTypeId = createEventType(appId);
 
         // We also need behavior groups.
-        BehaviorGroup behaviorGroup1 = createBehaviorGroup(accountId, bundle);
-        BehaviorGroup behaviorGroup2 = createBehaviorGroup(accountId, bundle);
-        BehaviorGroup defaultBehaviorGroup = createBehaviorGroup(null, bundle);
+        UUID behaviorGroupId1 = createBehaviorGroup(accountId, bundleId);
+        UUID behaviorGroupId2 = createBehaviorGroup(accountId, bundleId);
+        UUID defaultBehaviorGroupId = createBehaviorGroup(null, bundleId);
 
         // We need actions for our behavior groups.
-        Endpoint endpoint1 = createWebhookEndpoint(accountId, SECRET_TOKEN);
-        Endpoint endpoint2 = createWebhookEndpoint(accountId, SECRET_TOKEN);
-        Endpoint endpoint3 = createWebhookEndpoint(accountId, "wrong-secret-token");
+        UUID endpointId1 = createWebhookEndpoint(accountId, SECRET_TOKEN);
+        UUID endpointId2 = createWebhookEndpoint(accountId, SECRET_TOKEN);
+        UUID endpointId3 = createWebhookEndpoint(accountId, "wrong-secret-token");
 
         // We'll start with a first behavior group actions configuration. This will slightly change later in the test.
-        addBehaviorGroupAction(behaviorGroup1.getId(), endpoint1.getId());
-        addBehaviorGroupAction(behaviorGroup1.getId(), endpoint2.getId());
-        addBehaviorGroupAction(behaviorGroup2.getId(), endpoint3.getId());
+        addBehaviorGroupAction(behaviorGroupId1, endpointId1);
+        addBehaviorGroupAction(behaviorGroupId1, endpointId2);
+        addBehaviorGroupAction(behaviorGroupId2, endpointId3);
 
         // Adding an email endpoint to the default behavior group
-        addDefaultBehaviorGroupAction(defaultBehaviorGroup);
+        addDefaultBehaviorGroupAction(defaultBehaviorGroupId);
 
         // Let's push a first message! It should not trigger any webhook call since we didn't link the event type with any behavior group.
         pushMessage(0, 0, 0);
 
         // Now we'll link the event type with one behavior group.
-        addEventTypeBehavior(eventType.getId(), behaviorGroup1.getId());
+        addEventTypeBehavior(eventTypeId, behaviorGroupId1);
 
         // Get the account canonical email endpoint
-        Endpoint emailEndpoint = getAccountCanonicalEmailEndpoint(accountId);
+        UUID emailEndpointId = getAccountCanonicalEmailEndpoint(accountId);
 
         // Pushing a new message should trigger two webhook calls.
         pushMessage(2, 0, 0);
 
         // Let's check the notifications history.
-        retry(() -> checkEndpointHistory(endpoint1, 1, true));
-        retry(() -> checkEndpointHistory(endpoint2, 1, true));
-        retry(() -> checkEndpointHistory(emailEndpoint, 0, true));
+        retry(() -> checkEndpointHistory(endpointId1, 1, true));
+        retry(() -> checkEndpointHistory(endpointId2, 1, true));
+        retry(() -> checkEndpointHistory(emailEndpointId, 0, true));
 
         // We'll link the event type with the default behavior group
-        addEventTypeBehavior(eventType.getId(), defaultBehaviorGroup.getId());
+        addEventTypeBehavior(eventTypeId, defaultBehaviorGroupId);
 
         // We'll link an additional behavior group to the event type.
-        addEventTypeBehavior(eventType.getId(), behaviorGroup2.getId());
+        addEventTypeBehavior(eventTypeId, behaviorGroupId2);
 
         // Pushing a new message should trigger three webhook calls and 1 emails - email is not sent as the user is not subscribed
         pushMessage(3, 1, 0);
 
         // Let's check the notifications history again.
-        retry(() -> checkEndpointHistory(endpoint1, 2, true));
-        retry(() -> checkEndpointHistory(endpoint2, 2, true));
-        retry(() -> checkEndpointHistory(endpoint3, 1, false));
-        retry(() -> checkEndpointHistory(emailEndpoint, 0, true));
+        retry(() -> checkEndpointHistory(endpointId1, 2, true));
+        retry(() -> checkEndpointHistory(endpointId2, 2, true));
+        retry(() -> checkEndpointHistory(endpointId3, 1, false));
+        retry(() -> checkEndpointHistory(emailEndpointId, 0, true));
 
         // Lets subscribe the user to the email preferences
-        subscribeUserPreferences(accountId, username, app.getId());
+        subscribeUserPreferences(accountId, username, appId);
 
         // Pushing a new message should trigger three webhook calls and 1 email
         pushMessage(3, 1, 1);
 
         // Let's check the notifications history again.
-        retry(() -> checkEndpointHistory(endpoint1, 3, true));
-        retry(() -> checkEndpointHistory(endpoint2, 3, true));
-        retry(() -> checkEndpointHistory(endpoint3, 2, false));
-        retry(() -> checkEndpointHistory(emailEndpoint, 1, true));
+        retry(() -> checkEndpointHistory(endpointId1, 3, true));
+        retry(() -> checkEndpointHistory(endpointId2, 3, true));
+        retry(() -> checkEndpointHistory(endpointId3, 2, false));
+        retry(() -> checkEndpointHistory(emailEndpointId, 1, true));
 
         /*
          * Let's change the behavior group actions configuration by adding an action to the second behavior group.
          * Endpoint 2 is now an action for both behavior groups, but it should not be notified twice on each message because we don't want duplicate notifications.
          */
-        addBehaviorGroupAction(behaviorGroup2.getId(), endpoint2.getId());
+        addBehaviorGroupAction(behaviorGroupId2, endpointId2);
 
         // Pushing a new message should trigger three webhook calls.
         pushMessage(3, 1, 1);
 
         // Let's check the notifications history again.
-        retry(() -> checkEndpointHistory(endpoint1, 4, true));
-        retry(() -> checkEndpointHistory(endpoint2, 4, true));
-        retry(() -> checkEndpointHistory(endpoint3, 3, false));
-        retry(() -> checkEndpointHistory(emailEndpoint, 2, true));
+        retry(() -> checkEndpointHistory(endpointId1, 4, true));
+        retry(() -> checkEndpointHistory(endpointId2, 4, true));
+        retry(() -> checkEndpointHistory(endpointId3, 3, false));
+        retry(() -> checkEndpointHistory(emailEndpointId, 2, true));
 
         /*
          * What happens if we unlink the event type from the behavior groups?
          * Pushing a new message should not trigger any webhook call.
          */
         // Unlinking user behavior group
-        clearEventTypeBehaviors(eventType);
+        clearEventTypeBehaviors(eventTypeId);
 
         pushMessage(0, 0, 0);
 
         // The notifications history should be exactly the same than last time.
-        retry(() -> checkEndpointHistory(endpoint1, 4, true));
-        retry(() -> checkEndpointHistory(endpoint2, 4, true));
-        retry(() -> checkEndpointHistory(endpoint3, 3, false));
-        retry(() -> checkEndpointHistory(emailEndpoint, 2, true));
+        retry(() -> checkEndpointHistory(endpointId1, 4, true));
+        retry(() -> checkEndpointHistory(endpointId2, 4, true));
+        retry(() -> checkEndpointHistory(endpointId3, 3, false));
+        retry(() -> checkEndpointHistory(emailEndpointId, 2, true));
 
         // Linking the default behavior group again
-        addEventTypeBehavior(eventType.getId(), defaultBehaviorGroup.getId());
+        addEventTypeBehavior(eventTypeId, defaultBehaviorGroupId);
         pushMessage(0, 1, 1);
 
         // Deleting the default behavior group should unlink it
-        deleteBehaviorGroup(defaultBehaviorGroup);
+        deleteBehaviorGroup(defaultBehaviorGroupId);
         pushMessage(0, 0, 0);
 
         // We'll finish with a bundle removal.
-        deleteBundle(bundle);
+        deleteBundle(bundleId);
     }
 
     @Transactional
-    Bundle createBundle() {
+    UUID createBundle() {
         Bundle bundle = new Bundle(BUNDLE_NAME, "A bundle");
         entityManager.persist(bundle);
-        return bundle;
+        return bundle.getId();
     }
 
     @Transactional
-    Application createApp(Bundle bundle) {
+    UUID createApp(UUID bundleId) {
+        Bundle bundle = entityManager.find(Bundle.class, bundleId);
         Application app = new Application();
         app.setBundle(bundle);
         app.setBundleId(bundle.getId());
         app.setName(APP_NAME);
         app.setDisplayName("The best app in the life");
         entityManager.persist(app);
-        return app;
+        return app.getId();
     }
 
     @Transactional
-    EventType createEventType(Application app) {
+    UUID createEventType(UUID appId) {
+        Application app = entityManager.find(Application.class, appId);
         EventType eventType = new EventType();
         eventType.setApplication(app);
         eventType.setApplicationId(app.getId());
@@ -255,32 +257,33 @@ public class LifecycleITest {
         eventType.setDisplayName("Policies will take care of the rules");
         eventType.setDescription("Policies is super cool, you should use it");
         entityManager.persist(eventType);
-        return eventType;
+        return eventType.getId();
     }
 
     @Transactional
-    BehaviorGroup createBehaviorGroup(String accountId, Bundle bundle) {
+    UUID createBehaviorGroup(String accountId, UUID bundleId) {
+        Bundle bundle = entityManager.find(Bundle.class, bundleId);
         BehaviorGroup behaviorGroup = new BehaviorGroup();
         behaviorGroup.setAccountId(accountId);
         behaviorGroup.setDisplayName("Behavior group");
         behaviorGroup.setBundle(bundle);
         behaviorGroup.setBundleId(bundle.getId());
         entityManager.persist(behaviorGroup);
-        return behaviorGroup;
+        return behaviorGroup.getId();
     }
 
     @Transactional
-    void deleteBehaviorGroup(BehaviorGroup behaviorGroup) {
+    void deleteBehaviorGroup(UUID behaviorGroupId) {
         entityManager.createQuery("DELETE FROM BehaviorGroup WHERE id = :id")
-                .setParameter("id", behaviorGroup.getId())
+                .setParameter("id", behaviorGroupId)
                 .executeUpdate();
     }
 
-    private Endpoint getAccountCanonicalEmailEndpoint(String accountId) {
-        return endpointRepository.getOrCreateDefaultEmailSubscription(accountId);
+    private UUID getAccountCanonicalEmailEndpoint(String accountId) {
+        return endpointRepository.getOrCreateDefaultEmailSubscription(accountId).getId();
     }
 
-    private Endpoint createWebhookEndpoint(String accountId, String secretToken) {
+    private UUID createWebhookEndpoint(String accountId, String secretToken) {
         WebhookProperties properties = new WebhookProperties();
         properties.setMethod(HttpType.POST);
         properties.setDisableSslVerification(true);
@@ -289,15 +292,15 @@ public class LifecycleITest {
         return createEndpoint(accountId, WEBHOOK, "endpoint", "Endpoint", properties);
     }
 
-    private void addDefaultBehaviorGroupAction(BehaviorGroup behaviorGroup) {
+    private void addDefaultBehaviorGroupAction(UUID behaviorGroupId) {
         EmailSubscriptionProperties properties = new EmailSubscriptionProperties();
         properties.setOnlyAdmins(true);
-        Endpoint endpoint = createEndpoint(null, EMAIL_SUBSCRIPTION, "Email endpoint", "System email endpoint", properties);
-        addBehaviorGroupAction(behaviorGroup.getId(), endpoint.getId());
+        UUID endpointId = createEndpoint(null, EMAIL_SUBSCRIPTION, "Email endpoint", "System email endpoint", properties);
+        addBehaviorGroupAction(behaviorGroupId, endpointId);
     }
 
     @Transactional
-    Endpoint createEndpoint(String accountId, EndpointType type, String name, String description, EndpointProperties properties) {
+    UUID createEndpoint(String accountId, EndpointType type, String name, String description, EndpointProperties properties) {
         Endpoint endpoint = new Endpoint();
         endpoint.setType(type);
         endpoint.setAccountId(accountId);
@@ -309,7 +312,7 @@ public class LifecycleITest {
 
         entityManager.persist(endpoint);
         entityManager.persist(endpoint.getProperties());
-        return endpoint;
+        return endpoint.getId();
     }
 
     @Transactional
@@ -477,9 +480,9 @@ public class LifecycleITest {
     }
 
     @Transactional
-    void clearEventTypeBehaviors(EventType eventType) {
-        entityManager.createQuery("DELETE EventTypeBehavior WHERE eventType = :eventType")
-                .setParameter("eventType", eventType)
+    void clearEventTypeBehaviors(UUID eventTypeId) {
+        entityManager.createQuery("DELETE EventTypeBehavior WHERE eventType.id = :eventTypeId")
+                .setParameter("eventTypeId", eventTypeId)
                 .executeUpdate();
     }
 
@@ -491,17 +494,17 @@ public class LifecycleITest {
     }
 
     @Transactional
-    boolean checkEndpointHistory(Endpoint endpoint, int expectedHistoryEntries, boolean expectedInvocationResult) {
-        return entityManager.createQuery("FROM NotificationHistory WHERE endpoint = :endpoint AND invocationResult = :invocationResult", NotificationHistory.class)
-                .setParameter("endpoint", endpoint)
+    boolean checkEndpointHistory(UUID endpointId, int expectedHistoryEntries, boolean expectedInvocationResult) {
+        return entityManager.createQuery("FROM NotificationHistory WHERE endpoint.id = :endpointId AND invocationResult = :invocationResult", NotificationHistory.class)
+                .setParameter("endpointId", endpointId)
                 .setParameter("invocationResult", expectedInvocationResult)
                 .getResultList().size() == expectedHistoryEntries;
     }
 
     @Transactional
-    void deleteBundle(Bundle bundle) {
+    void deleteBundle(UUID bundleId) {
         entityManager.createQuery("DELETE FROM Bundle WHERE id = :id")
-               .setParameter("id", bundle.getId())
+               .setParameter("id", bundleId)
                .executeUpdate();
     }
 
