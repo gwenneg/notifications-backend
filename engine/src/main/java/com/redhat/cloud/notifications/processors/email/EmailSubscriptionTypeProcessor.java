@@ -5,13 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.redhat.cloud.notifications.db.StatelessSessionFactory;
 import com.redhat.cloud.notifications.db.repositories.EmailAggregationRepository;
 import com.redhat.cloud.notifications.db.repositories.EmailSubscriptionRepository;
+import com.redhat.cloud.notifications.db.repositories.TemplateRepository;
 import com.redhat.cloud.notifications.ingress.Action;
 import com.redhat.cloud.notifications.models.AggregationCommand;
+import com.redhat.cloud.notifications.models.ApplicationEmailTemplate;
 import com.redhat.cloud.notifications.models.EmailAggregation;
 import com.redhat.cloud.notifications.models.EmailAggregationKey;
 import com.redhat.cloud.notifications.models.EmailSubscriptionType;
 import com.redhat.cloud.notifications.models.Endpoint;
 import com.redhat.cloud.notifications.models.Event;
+import com.redhat.cloud.notifications.models.EventTypeEmailTemplate;
 import com.redhat.cloud.notifications.models.NotificationHistory;
 import com.redhat.cloud.notifications.processors.EndpointTypeProcessor;
 import com.redhat.cloud.notifications.recipients.RecipientResolver;
@@ -21,12 +24,14 @@ import com.redhat.cloud.notifications.recipients.request.ActionRecipientSettings
 import com.redhat.cloud.notifications.recipients.request.EndpointRecipientSettings;
 import com.redhat.cloud.notifications.templates.EmailTemplate;
 import com.redhat.cloud.notifications.templates.EmailTemplateFactory;
+import com.redhat.cloud.notifications.templates.TemplateService;
 import com.redhat.cloud.notifications.transformers.BaseTransformer;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.qute.TemplateInstance;
 import io.smallrye.reactive.messaging.annotations.Blocking;
 import io.vertx.core.json.JsonObject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Acknowledgment;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.jboss.logging.Logger;
@@ -36,6 +41,7 @@ import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -54,6 +60,9 @@ public class EmailSubscriptionTypeProcessor implements EndpointTypeProcessor {
     public static final String AGGREGATION_COMMAND_ERROR_COUNTER_NAME = "aggregation.command.error";
 
     private static final Logger LOGGER = Logger.getLogger(EmailSubscriptionTypeProcessor.class);
+
+    @ConfigProperty(name = "notifications.use-templates-from-db", defaultValue = "false")
+    boolean useTemplatesFromDb;
 
     @Inject
     EmailSubscriptionRepository emailSubscriptionRepository;
@@ -85,6 +94,12 @@ public class EmailSubscriptionTypeProcessor implements EndpointTypeProcessor {
     @Inject
     MeterRegistry registry;
 
+    @Inject
+    TemplateRepository templateRepository;
+
+    @Inject
+    TemplateService templateService;
+
     private Counter processedEmailCount;
     private Counter rejectedAggregationCommandCount;
     private Counter processedAggregationCommandCount;
@@ -105,9 +120,14 @@ public class EmailSubscriptionTypeProcessor implements EndpointTypeProcessor {
         } else {
             Action action = event.getAction();
             final EmailTemplate template = emailTemplateFactory.get(action.getBundle(), action.getApplication());
-            final boolean shouldSaveAggregation = Arrays.stream(EmailSubscriptionType.values())
-                    .filter(emailSubscriptionType -> emailSubscriptionType != EmailSubscriptionType.INSTANT)
-                    .anyMatch(emailSubscriptionType -> template.isSupported(action.getEventType(), emailSubscriptionType));
+            boolean shouldSaveAggregation;
+            if (useTemplatesFromDb) {
+                shouldSaveAggregation = templateRepository.isSupported(action.getBundle(), action.getApplication());
+            } else {
+                shouldSaveAggregation = Arrays.stream(EmailSubscriptionType.values())
+                        .filter(emailSubscriptionType -> emailSubscriptionType != EmailSubscriptionType.INSTANT)
+                        .anyMatch(emailSubscriptionType -> template.isSupported(action.getEventType(), emailSubscriptionType));
+            }
 
             if (shouldSaveAggregation) {
                 EmailAggregation aggregation = new EmailAggregation();
@@ -132,12 +152,28 @@ public class EmailSubscriptionTypeProcessor implements EndpointTypeProcessor {
     private List<NotificationHistory> sendEmail(Event event, Set<Endpoint> endpoints, EmailSubscriptionType emailSubscriptionType, EmailTemplate emailTemplate) {
         processedEmailCount.increment();
         Action action = event.getAction();
-        if (!emailTemplate.isSupported(action.getEventType(), emailSubscriptionType)) {
-            return Collections.emptyList();
-        }
 
-        TemplateInstance subject = emailTemplate.getTitle(action.getEventType(), emailSubscriptionType);
-        TemplateInstance body = emailTemplate.getBody(action.getEventType(), emailSubscriptionType);
+        TemplateInstance subject = null;
+        TemplateInstance body = null;
+
+        if (useTemplatesFromDb) {
+            Optional<EventTypeEmailTemplate> dbEmailTemplate = templateRepository
+                    .findEventTypeEmailTemplate(event.getEventType().getId(), emailSubscriptionType);
+            if (dbEmailTemplate.isEmpty()) {
+                return Collections.emptyList();
+            } else {
+                String subjectData = dbEmailTemplate.get().getSubjectTemplate().getData();
+                subject = templateService.compileTemplate(subjectData, "subject");
+                String bodyData = dbEmailTemplate.get().getBodyTemplate().getData();
+                body = templateService.compileTemplate(bodyData, "body");
+            }
+        } else {
+            if (!emailTemplate.isSupported(action.getEventType(), emailSubscriptionType)) {
+                return Collections.emptyList();
+            }
+            subject = emailTemplate.getTitle(action.getEventType(), emailSubscriptionType);
+            body = emailTemplate.getBody(action.getEventType(), emailSubscriptionType);
+        }
 
         if (subject == null || body == null) {
             return Collections.emptyList();
@@ -150,13 +186,12 @@ public class EmailSubscriptionTypeProcessor implements EndpointTypeProcessor {
 
         Set<String> subscribers = Set.copyOf(emailSubscriptionRepository
                 .getEmailSubscribersUserId(action.getAccountId(), action.getBundle(), action.getApplication(), emailSubscriptionType));
-        return recipientResolver.recipientUsers(action.getAccountId(), requests, subscribers)
-                .stream()
-                .map(user -> emailSender.sendEmail(user, event, subject, body))
-                // The value may be an empty Optional in case of Qute template exception.
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toList());
+        List<NotificationHistory> historyEntries = new ArrayList<>();
+        for (User user : recipientResolver.recipientUsers(action.getAccountId(), requests, subscribers)) {
+            // The value may be an empty Optional in case of Qute template exception.
+            emailSender.sendEmail(user, event, subject, body).ifPresent(historyEntries::add);
+        }
+        return historyEntries;
     }
 
     @Incoming(AGGREGATION_CHANNEL)
@@ -194,15 +229,34 @@ public class EmailSubscriptionTypeProcessor implements EndpointTypeProcessor {
     private void processAggregateEmailsByAggregationKey(EmailAggregationKey aggregationKey, LocalDateTime startTime, LocalDateTime endTime, EmailSubscriptionType emailSubscriptionType, boolean delete) {
         final EmailTemplate emailTemplate = emailTemplateFactory.get(aggregationKey.getBundle(), aggregationKey.getApplication());
 
-        if (!emailTemplate.isEmailSubscriptionSupported(emailSubscriptionType)) {
-            if (delete) {
-                emailAggregationRepository.purgeOldAggregation(aggregationKey, endTime);
-            }
-            return;
-        }
+        TemplateInstance subject = null;
+        TemplateInstance body = null;
 
-        TemplateInstance subject = emailTemplate.getTitle(null, emailSubscriptionType);
-        TemplateInstance body = emailTemplate.getBody(null, emailSubscriptionType);
+        if (useTemplatesFromDb) {
+            Optional<ApplicationEmailTemplate> dbEmailTemplate = templateRepository
+                    .findApplicationEmailTemplate(aggregationKey.getBundle(), aggregationKey.getApplication(), emailSubscriptionType);
+            if (dbEmailTemplate.isEmpty()) {
+                if (delete) {
+                    emailAggregationRepository.purgeOldAggregation(aggregationKey, endTime);
+                }
+                return;
+            } else {
+                String subjectData = dbEmailTemplate.get().getSubjectTemplate().getData();
+                subject = templateService.compileTemplate(subjectData, "subject");
+                String bodyData = dbEmailTemplate.get().getBodyTemplate().getData();
+                body = templateService.compileTemplate(bodyData, "body");
+            }
+        } else {
+            if (!emailTemplate.isEmailSubscriptionSupported(emailSubscriptionType)) {
+                if (delete) {
+                    emailAggregationRepository.purgeOldAggregation(aggregationKey, endTime);
+                }
+                return;
+            }
+
+            subject = emailTemplate.getTitle(null, emailSubscriptionType);
+            body = emailTemplate.getBody(null, emailSubscriptionType);
+        }
 
         if (subject == null || body == null) {
             if (delete) {

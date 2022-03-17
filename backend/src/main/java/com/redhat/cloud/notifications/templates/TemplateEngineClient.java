@@ -24,6 +24,10 @@ import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 public interface TemplateEngineClient {
 
     @GET
+    @Path("/migrate_to_db")
+    void migrate();
+
+    @GET
     @Path("/subscription_type_supported")
     @Produces(APPLICATION_JSON)
     Boolean isSubscriptionTypeSupported(@NotNull @RestQuery String bundleName, @NotNull @RestQuery String applicationName, @NotNull @RestQuery EmailSubscriptionType subscriptionType);
