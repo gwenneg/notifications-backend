@@ -36,6 +36,15 @@ public class MaintenanceModeRequestFilter {
     @ServerRequestFilter
     public void filter(ContainerRequestContext requestContext) {
         try {
+            System.out.println("==================0");
+            System.out.println(requestContext.toString());
+            System.out.println("==================0.1");
+            System.out.println(requestContext.getUriInfo().toString());
+            System.out.println("==================0.2");
+            System.out.println(requestContext.getUriInfo().getRequestUri().toString());
+            System.out.println("==================0.3");
+            System.out.println(requestContext.getUriInfo().getRequestUri().getPath().toString());
+            System.out.println("==================0.4");
             String requestPath = requestContext.getUriInfo().getRequestUri().getPath();
             System.out.println("==================1");
             Log.tracef("Filtering request to %s", requestPath);
