@@ -35,23 +35,28 @@ public class MaintenanceModeRequestFilter {
 
     @ServerRequestFilter
     public Response filter(ContainerRequestContext requestContext) {
-        String requestPath = requestContext.getUriInfo().getRequestUri().getPath();
-        Log.tracef("Filtering request to %s", requestPath);
+        try {
+            String requestPath = requestContext.getUriInfo().getRequestUri().getPath();
+            Log.tracef("Filtering request to %s", requestPath);
 
-        if (!isAffectedByMaintenanceMode(requestPath)) {
-            return null;
-        }
+            if (!isAffectedByMaintenanceMode(requestPath)) {
+                return null;
+            }
 
-        /*
-         * If this point is reached, the current request path can be affected by the maintenance mode.
-         * Let's check if maintenance is on in the database.
-         */
-        if (isMaintenance()) {
-            Log.trace("Maintenance mode is enabled in the database, aborting request and returning HTTP status 503");
-            return MAINTENANCE_IN_PROGRESS;
-        } else {
-            // This filter work is done. The request will be processed normally.
-            return null;
+            /*
+             * If this point is reached, the current request path can be affected by the maintenance mode.
+             * Let's check if maintenance is on in the database.
+             */
+            if (isMaintenance()) {
+                Log.trace("Maintenance mode is enabled in the database, aborting request and returning HTTP status 503");
+                return MAINTENANCE_IN_PROGRESS;
+            } else {
+                // This filter work is done. The request will be processed normally.
+                return null;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
         }
     }
 
