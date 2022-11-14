@@ -58,7 +58,7 @@ public class MaintenanceModeRequestFilter {
             } else {
                 System.out.println("==================6");
                 // This filter work is done. The request will be processed normally.
-                return null;
+                return Response.ok().build();
             }
         } catch (Exception e) {
             e.printStackTrace();
