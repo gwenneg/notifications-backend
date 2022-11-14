@@ -34,7 +34,7 @@ public class MaintenanceModeRequestFilter {
     StatusRepository statusRepository;
 
     @ServerRequestFilter
-    public Response filter(ContainerRequestContext requestContext) {
+    public void filter(ContainerRequestContext requestContext) {
         try {
             String requestPath = requestContext.getUriInfo().getRequestUri().getPath();
             System.out.println("==================1");
@@ -42,7 +42,7 @@ public class MaintenanceModeRequestFilter {
             System.out.println("==================2");
 
             if (!isAffectedByMaintenanceMode(requestPath)) {
-                return null;
+                return;
             }
             System.out.println("==================3");
 
@@ -54,11 +54,11 @@ public class MaintenanceModeRequestFilter {
                 System.out.println("==================4");
                 Log.trace("Maintenance mode is enabled in the database, aborting request and returning HTTP status 503");
                 System.out.println("==================5");
-                return MAINTENANCE_IN_PROGRESS;
+
+                requestContext.abortWith(MAINTENANCE_IN_PROGRESS);
             } else {
                 System.out.println("==================6");
                 // This filter work is done. The request will be processed normally.
-                return Response.ok().build();
             }
         } catch (Exception e) {
             e.printStackTrace();
