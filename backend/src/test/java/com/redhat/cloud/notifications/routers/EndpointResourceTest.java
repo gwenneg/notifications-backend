@@ -40,6 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import javax.inject.Inject;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -530,8 +531,6 @@ public class EndpointResourceTest extends DbIsolatedTest {
                 .then()
                 .statusCode(400);
 
-        featureFlipper.setObEnabled(true);
-
         given()
                 .header(identityHeader)
                 .when()
@@ -540,8 +539,6 @@ public class EndpointResourceTest extends DbIsolatedTest {
                 .post("/endpoints")
                 .then()
                 .statusCode(400);
-
-        featureFlipper.setObEnabled(false);
 
     }
 
@@ -574,8 +571,6 @@ public class EndpointResourceTest extends DbIsolatedTest {
         ep.setProperties(cAttr);
         ep.setStatus(EndpointStatus.DELETING); // Trying to set other status
 
-        featureFlipper.setObEnabled(true);
-
         // First we try with bogus values for the OB endpoint itself (no valid bridge)
         given()
                 .header(identityHeader)
@@ -587,20 +582,7 @@ public class EndpointResourceTest extends DbIsolatedTest {
                 .statusCode(500);
 
         // Now set up some mock OB endpoints (simulate valid bridge)
-        Bridge bridge = new Bridge("321", "http://some.events/", "my bridge");
-        BridgeItemList<Bridge> bridgeList = new BridgeItemList<>();
-        bridgeList.setSize(1);
-        bridgeList.setTotal(1);
-        List<Bridge> items = new ArrayList<>();
-        items.add(bridge);
-        bridgeList.setItems(items);
-        Map<String, String> auth = new HashMap<>();
-        auth.put("access_token", "li-la-lu-token");
-        Map<String, String> processor = new HashMap<>();
-        processor.put("id", "p-my-id");
-
-        MockServerConfig.addOpenBridgeEndpoints(auth, bridgeList, processor);
-        bridgeHelper.setOurBridgeName("my bridge");
+        Bridge bridge = mockBridge();
 
         String responseBody = given()
                 .header(identityHeader)
@@ -667,7 +649,25 @@ public class EndpointResourceTest extends DbIsolatedTest {
         }
 
         MockServerConfig.clearOpenBridgeEndpoints(bridge);
-        featureFlipper.setObEnabled(false);
+    }
+
+    private Bridge mockBridge() {
+        Bridge bridge = new Bridge("321", "http://some.events/", "my bridge");
+        BridgeItemList<Bridge> bridgeList = new BridgeItemList<>();
+        bridgeList.setSize(1);
+        bridgeList.setTotal(1);
+        List<Bridge> items = new ArrayList<>();
+        items.add(bridge);
+        bridgeList.setItems(items);
+        Map<String, String> auth = new HashMap<>();
+        auth.put("access_token", "li-la-lu-token");
+        Map<String, String> processor = new HashMap<>();
+        processor.put("id", "p-my-id");
+
+        MockServerConfig.addOpenBridgeEndpoints(auth, bridgeList, processor);
+        bridgeHelper.setOurBridgeName("my bridge");
+
+        return bridge;
     }
 
     @Test
@@ -1852,9 +1852,12 @@ public class EndpointResourceTest extends DbIsolatedTest {
         endpoint.setName(name);
         endpoint.setServerErrors(serverErrors);
 
+        Bridge bridge = mockBridge();
+
         for (final var url : ValidNonPrivateUrlValidatorTest.validUrls) {
             // Test with a camel endpoint.
             camelProperties.setUrl(url);
+            camelProperties.setExtras(Collections.emptyMap());
             endpoint.setType(EndpointType.CAMEL);
             endpoint.setProperties(camelProperties);
             endpoint.setSubType(subType);
@@ -1883,6 +1886,8 @@ public class EndpointResourceTest extends DbIsolatedTest {
                 .then()
                 .statusCode(200);
         }
+
+        MockServerConfig.clearOpenBridgeEndpoints(bridge);
     }
 
     /**

@@ -5,7 +5,6 @@ import com.redhat.cloud.notifications.MicrometerAssertionHelper;
 import com.redhat.cloud.notifications.MockServerConfig;
 import com.redhat.cloud.notifications.MockServerLifecycleManager;
 import com.redhat.cloud.notifications.TestLifecycleManager;
-import com.redhat.cloud.notifications.config.FeatureFlipper;
 import com.redhat.cloud.notifications.db.ResourceHelpers;
 import com.redhat.cloud.notifications.db.converters.MapConverter;
 import com.redhat.cloud.notifications.db.repositories.NotificationHistoryRepository;
@@ -143,9 +142,6 @@ class CamelTypeProcessorTest {
     BridgeHelper bridgeHelper;
 
     @Inject
-    FeatureFlipper featureFlipper;
-
-    @Inject
     ResourceHelpers resourceHelpers;
 
     @InjectMock
@@ -244,7 +240,6 @@ class CamelTypeProcessorTest {
         Endpoint endpoint = buildCamelEndpoint(event.getAction().getAccountId());
         endpoint.setSubType("slack");
 
-        featureFlipper.setObEnabled(true);
         bridgeHelper.setOurBridgeName(null);
 
         // Let's trigger the processing.
@@ -273,14 +268,10 @@ class CamelTypeProcessorTest {
         assertEquals(1, historyItem.getDetails().size());
         Map<String, Object> details = historyItem.getDetails();
         assertTrue(details.containsKey("failure"));
-
-        featureFlipper.setObEnabled(false);
     }
 
     @Test
     void oBEndpointProcessingGoodBridge() {
-
-        featureFlipper.setObEnabled(true);
 
         // We need input data for the test.
         Event event = buildEvent();
@@ -355,8 +346,6 @@ class CamelTypeProcessorTest {
         assertEquals(NotificationStatus.FAILED_INTERNAL, result.get(0).getStatus());
 
         MockServerConfig.clearOpenBridgeEndpoints(bridge);
-        featureFlipper.setObEnabled(false);
-
     }
 
     /**
@@ -364,9 +353,6 @@ class CamelTypeProcessorTest {
      */
     @Test
     void callOpenBridgeExpectedJson() {
-        // Set "RHOSE" feature enabled to be able to test this.
-        this.featureFlipper.setObEnabled(true);
-
         // The path that will be set up in the Mock Server, and that will be used as the Bridge's endpoint.
         final String testMockServerPath = "/events/slack/json-output-check";
 
@@ -482,9 +468,6 @@ class CamelTypeProcessorTest {
 
         // Clear also the RHOSE endpoints for this test.
         MockServerConfig.clearOpenBridgeEndpoints(bridge);
-
-        // Reset the feature flag to false in order to avoid affecting any other tests.
-        featureFlipper.setObEnabled(false);
     }
 
     private static Event buildEvent() {
