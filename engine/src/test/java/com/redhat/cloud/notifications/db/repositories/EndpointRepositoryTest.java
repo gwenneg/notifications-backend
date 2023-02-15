@@ -1,7 +1,6 @@
 package com.redhat.cloud.notifications.db.repositories;
 
 import com.redhat.cloud.notifications.TestLifecycleManager;
-import com.redhat.cloud.notifications.config.FeatureFlipper;
 import com.redhat.cloud.notifications.db.ResourceHelpers;
 import com.redhat.cloud.notifications.db.StatelessSessionFactory;
 import com.redhat.cloud.notifications.models.Endpoint;
@@ -9,13 +8,10 @@ import com.redhat.cloud.notifications.models.HttpType;
 import com.redhat.cloud.notifications.models.WebhookProperties;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.inject.Inject;
-import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -40,22 +36,6 @@ public class EndpointRepositoryTest {
 
     @Inject
     EndpointRepository endpointRepository;
-
-    @Inject
-    EntityManager entityManager;
-
-    @Inject
-    FeatureFlipper featureFlipper;
-
-    @BeforeEach
-    void beforeEach() {
-        featureFlipper.setDisableWebhookEndpointsOnFailure(true);
-    }
-
-    @AfterEach
-    void afterEach() {
-        featureFlipper.setDisableWebhookEndpointsOnFailure(false);
-    }
 
     @Test
     void testIncrementEndpointServerErrors() {

@@ -57,9 +57,6 @@ public class FeatureFlipper {
     @ConfigProperty(name = "notifications.use-templates-from-db", defaultValue = "false")
     boolean useTemplatesFromDb;
 
-    @ConfigProperty(name = "notifications.disable-webhook-endpoints-on-failure", defaultValue = "false")
-    boolean disableWebhookEndpointsOnFailure;
-
     @ConfigProperty(name = "notifications.use-sources-secrets-backend", defaultValue = "false")
     boolean sourcesSecretsBackend;
 
@@ -128,7 +125,6 @@ public class FeatureFlipper {
         Log.infof("The Kafka outage detector is %s", kafkaConsumedTotalCheckerEnabled ? "enabled" : "disabled");
         Log.infof("The use of default templates is %s", useDefaultTemplate ? "enabled" : "disabled");
         Log.infof("The use of templates from database is %s", useTemplatesFromDb ? "enabled" : "disabled");
-        Log.infof("The deactivation of webhook endpoints on failure is %s", disableWebhookEndpointsOnFailure ? "enabled" : "disabled");
         Log.infof("The sources back end as the secrets manager is %s", sourcesSecretsBackend ? "enabled" : "disabled");
         Log.infof("The use of rbac for fetching users is %s", useRbacForFetchingUsers ? "enabled" : "disabled");
         Log.infof("The Policies' email templates V2 are %s", policiesEmailTemplatesV2Enabled ? "enabled" : "disabled");
@@ -198,15 +194,6 @@ public class FeatureFlipper {
     public void setUseTemplatesFromDb(boolean useTemplatesFromDb) {
         checkTestLaunchMode();
         this.useTemplatesFromDb = useTemplatesFromDb;
-    }
-
-    public boolean isDisableWebhookEndpointsOnFailure() {
-        return disableWebhookEndpointsOnFailure;
-    }
-
-    public void setDisableWebhookEndpointsOnFailure(boolean disableWebhookEndpointsOnFailure) {
-        checkTestLaunchMode();
-        this.disableWebhookEndpointsOnFailure = disableWebhookEndpointsOnFailure;
     }
 
     /**

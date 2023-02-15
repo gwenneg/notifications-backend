@@ -186,20 +186,18 @@ public class WebhookTypeProcessor extends EndpointTypeProcessor {
                     serverError = true;
                     Log.debugf("Webhook request to %s failed: %d %s", url, resp.statusCode(), resp.statusMessage());
                     history.setStatus(NotificationStatus.FAILED_INTERNAL);
-                    if (featureFlipper.isDisableWebhookEndpointsOnFailure()) {
-                        if (!isEmailEndpoint) {
-                            /*
-                             * The target endpoint returned a 5xx status. That kind of error happens in case of remote
-                             * server failure, which is usually something temporary. Sending another notification to
-                             * the same endpoint may work in the future, so the endpoint is only disabled if the max
-                             * number of endpoint failures allowed from the configuration is exceeded.
-                             */
-                            boolean disabled = endpointRepository.incrementEndpointServerErrors(endpoint.getId(), maxServerErrors);
-                            if (disabled) {
-                                disabledWebhooksServerErrorCount.increment();
-                                Log.infof("Endpoint %s was disabled because we received too many 5xx status while calling it", endpoint.getId());
-                                integrationDisabledNotifier.tooManyServerErrors(endpoint, maxServerErrors);
-                            }
+                    if (!isEmailEndpoint) {
+                        /*
+                         * The target endpoint returned a 5xx status. That kind of error happens in case of remote
+                         * server failure, which is usually something temporary. Sending another notification to
+                         * the same endpoint may work in the future, so the endpoint is only disabled if the max
+                         * number of endpoint failures allowed from the configuration is exceeded.
+                         */
+                        boolean disabled = endpointRepository.incrementEndpointServerErrors(endpoint.getId(), maxServerErrors);
+                        if (disabled) {
+                            disabledWebhooksServerErrorCount.increment();
+                            Log.infof("Endpoint %s was disabled because we received too many 5xx status while calling it", endpoint.getId());
+                            integrationDisabledNotifier.tooManyServerErrors(endpoint, maxServerErrors);
                         }
                     }
                 } else {
@@ -211,36 +209,32 @@ public class WebhookTypeProcessor extends EndpointTypeProcessor {
                     }
                     history.setStatus(NotificationStatus.FAILED_INTERNAL);
                     // TODO NOTIF-512 Should we disable endpoints in case of 3xx status code?
-                    if (featureFlipper.isDisableWebhookEndpointsOnFailure()) {
-                        if (!isEmailEndpoint && resp.statusCode() >= 400 && resp.statusCode() < 500) {
-                            /*
-                             * The target endpoint returned a 4xx status. That kind of error requires an update of the
-                             * endpoint settings (URL, secret token...). The endpoint will most likely never return a
-                             * successful status code with the current settings, so it is disabled immediately.
-                             */
-                            boolean disabled = endpointRepository.disableEndpoint(endpoint.getId());
-                            if (disabled) {
-                                disabledWebhooksClientErrorCount.increment();
-                                Log.infof("Endpoint %s was disabled because we received a 4xx status while calling it", endpoint.getId());
-                                integrationDisabledNotifier.clientError(endpoint, resp.statusCode());
-                            }
-                        } else {
-                            /*
-                             * 3xx status codes may be considered has a failure soon, but first we need to confirm
-                             * that Vert.x is correctly following the redirections.
-                             */
-                            shouldResetEndpointServerErrors = true;
+                    if (!isEmailEndpoint && resp.statusCode() >= 400 && resp.statusCode() < 500) {
+                        /*
+                         * The target endpoint returned a 4xx status. That kind of error requires an update of the
+                         * endpoint settings (URL, secret token...). The endpoint will most likely never return a
+                         * successful status code with the current settings, so it is disabled immediately.
+                         */
+                        boolean disabled = endpointRepository.disableEndpoint(endpoint.getId());
+                        if (disabled) {
+                            disabledWebhooksClientErrorCount.increment();
+                            Log.infof("Endpoint %s was disabled because we received a 4xx status while calling it", endpoint.getId());
+                            integrationDisabledNotifier.clientError(endpoint, resp.statusCode());
                         }
+                    } else {
+                        /*
+                         * 3xx status codes may be considered has a failure soon, but first we need to confirm
+                         * that Vert.x is correctly following the redirections.
+                         */
+                        shouldResetEndpointServerErrors = true;
                     }
                 }
 
-                if (featureFlipper.isDisableWebhookEndpointsOnFailure()) {
-                    if (!isEmailEndpoint && shouldResetEndpointServerErrors) {
-                        // When a target endpoint is successfully called, its server errors counter is reset in the DB.
-                        boolean reset = endpointRepository.resetEndpointServerErrors(endpoint.getId());
-                        if (reset) {
-                            Log.tracef("The server errors counter of endpoint %s was just reset", endpoint.getId());
-                        }
+                if (!isEmailEndpoint && shouldResetEndpointServerErrors) {
+                    // When a target endpoint is successfully called, its server errors counter is reset in the DB.
+                    boolean reset = endpointRepository.resetEndpointServerErrors(endpoint.getId());
+                    if (reset) {
+                        Log.tracef("The server errors counter of endpoint %s was just reset", endpoint.getId());
                     }
                 }
 

@@ -225,8 +225,6 @@ public class WebhookTest {
 
     @Test
     void testDisableEndpointOnClientError() {
-        featureFlipper.setDisableWebhookEndpointsOnFailure(true);
-
         HttpRequest mockServerRequest = getMockHttpRequest("/client-error", request -> response().withStatusCode(401));
         try {
             Action action = buildWebhookAction();
@@ -245,14 +243,10 @@ public class WebhookTest {
             // Remove expectations
             MockServerLifecycleManager.getClient().clear(mockServerRequest);
         }
-
-        featureFlipper.setDisableWebhookEndpointsOnFailure(false);
     }
 
     @Test
     void testDisableEndpointOnServerError() {
-        featureFlipper.setDisableWebhookEndpointsOnFailure(true);
-
         HttpRequest mockServerRequest = getMockHttpRequest("/server-error", request -> response().withStatusCode(503));
         try {
             Action action = buildWebhookAction();
@@ -277,8 +271,6 @@ public class WebhookTest {
             // Remove expectations
             MockServerLifecycleManager.getClient().clear(mockServerRequest);
         }
-
-        featureFlipper.setDisableWebhookEndpointsOnFailure(false);
     }
 
     @Test
