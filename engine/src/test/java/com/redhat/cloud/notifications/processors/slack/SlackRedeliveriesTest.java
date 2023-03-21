@@ -4,61 +4,59 @@ import com.redhat.cloud.notifications.Json;
 import com.redhat.cloud.notifications.TestLifecycleManager;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import org.apache.camel.builder.AdviceWithRouteBuilder;
-import org.apache.camel.component.mock.MockEndpoint;
+import io.quarkus.test.junit.TestProfile;
 import org.apache.camel.quarkus.test.CamelQuarkusTestSupport;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static com.redhat.cloud.notifications.MockServerLifecycleManager.getClient;
 import static com.redhat.cloud.notifications.MockServerLifecycleManager.getMockServerUrl;
 import static com.redhat.cloud.notifications.TestConstants.DEFAULT_ORG_ID;
-import static com.redhat.cloud.notifications.processors.slack.SlackRouteBuilder.SLACK_OUTGOING_ROUTE;
 import static com.redhat.cloud.notifications.processors.slack.SlackRouteBuilder.REST_PATH;
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
-import static org.apache.camel.builder.AdviceWith.adviceWith;
+import static org.mockserver.model.HttpError.error;
+import static org.mockserver.model.HttpRequest.request;
+import static org.mockserver.verify.VerificationTimes.atLeast;
 
 @QuarkusTest
 @QuarkusTestResource(TestLifecycleManager.class)
-public class SlackRouteBuilderTest extends CamelQuarkusTestSupport {
+@TestProfile(IsolatedCamelContextTestProfile.class)
+public class SlackRedeliveriesTest extends CamelQuarkusTestSupport {
 
-    @Override
-    public boolean isUseRouteBuilder() {
-        return false;
-    }
+    private static final String MOCK_PATH = "/camel/slack";
 
     @Test
-    void testRoutes() throws Exception {
-        adviceWith(SLACK_OUTGOING_ROUTE, context(), new AdviceWithRouteBuilder() {
-            @Override
-            public void configure() throws Exception {
-                mockEndpointsAndSkip("slack*");
-            }
-        });
-
+    void test() {
         SlackNotification notification = buildNotification();
-
-        // Camel encodes the '#' character into '%23' when building the mock endpoint URI.
-        MockEndpoint slackEndpoint = getMockEndpoint("mock:slack:%23notifications");
-        slackEndpoint.expectedBodiesReceived(notification.message);
-
+        mockSlackServerFailure();
         given()
                 .contentType(JSON)
                 .body(Json.encode(notification))
                 .when().post(REST_PATH)
                 .then().statusCode(200);
-
-        slackEndpoint.assertIsSatisfied();
+        verifyRedeliveries();
     }
 
     private static SlackNotification buildNotification() {
         SlackNotification notification = new SlackNotification();
         notification.orgId = DEFAULT_ORG_ID;
         notification.historyId = UUID.randomUUID();
-        notification.webhookUrl = "https://foo.bar";
+        notification.webhookUrl = getMockServerUrl() + MOCK_PATH;
         notification.channel = "#notifications";
         notification.message = "This is a test!";
         return notification;
+    }
+
+    private static void mockSlackServerFailure() {
+        getClient()
+                .when(request().withMethod("POST").withPath(MOCK_PATH))
+                .error(error().withDropConnection(true));
+    }
+
+    private static void verifyRedeliveries() {
+        getClient()
+                .verify(request().withMethod("POST").withPath(MOCK_PATH), atLeast(3));
     }
 }

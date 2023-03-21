@@ -28,8 +28,10 @@ public class SlackNotificationProcessor implements Processor {
         SlackNotification slackNotification = objectMapper.readValue(body, SlackNotification.class);
 
         // Then, we're using fields from the parsed SlackNotification to build the outgoing data.
-        in.setHeader("channel", slackNotification.channel);
-        in.setHeader("webhookUrl", slackNotification.webhookUrl);
+        exchange.setProperty("orgId", slackNotification.orgId);
+        exchange.setProperty("historyId", slackNotification.historyId);
+        exchange.setProperty("channel", slackNotification.channel);
+        exchange.setProperty("webhookUrl", slackNotification.webhookUrl);
         in.setBody(slackNotification.message);
     }
 }
