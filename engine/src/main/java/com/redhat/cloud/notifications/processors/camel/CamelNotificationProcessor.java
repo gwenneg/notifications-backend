@@ -43,7 +43,7 @@ public abstract class CamelNotificationProcessor implements Processor {
 
         // Then, we're using fields from the parsed CamelNotification to build the outgoing data.
         exchange.setProperty(ORG_ID, commonNotification.orgId);
-        exchange.setProperty(HISTORY_ID, commonNotification.historyId);
+        exchange.setProperty(HISTORY_ID, exchange.getIn().getHeader("ce-id", String.class));
         exchange.setProperty(WEBHOOK_URL, commonNotification.webhookUrl);
         addExtraProperties(exchange, body);
         in.setBody(commonNotification.message);

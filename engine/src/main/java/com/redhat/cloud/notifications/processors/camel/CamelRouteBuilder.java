@@ -1,7 +1,7 @@
 package com.redhat.cloud.notifications.processors.camel;
 
 import com.redhat.cloud.notifications.processors.camel.slack.SlackRouteBuilder;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.builder.endpoint.EndpointRouteBuilder;
 import org.apache.camel.http.base.HttpOperationFailedException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import javax.inject.Inject;
@@ -12,9 +12,8 @@ import static com.redhat.cloud.notifications.processors.camel.ExchangeProperty.S
 import static com.redhat.cloud.notifications.processors.camel.ReturnRouteBuilder.RETURN_ROUTE_NAME;
 import static org.apache.camel.LoggingLevel.ERROR;
 import static org.apache.camel.LoggingLevel.INFO;
-import static org.apache.camel.builder.endpoint.StaticEndpointBuilders.direct;
 
-public abstract class CamelCommonExceptionHandler extends RouteBuilder {
+public abstract class CamelRouteBuilder extends EndpointRouteBuilder {
 
     @ConfigProperty(name = "notifications.camel.max-endpoint-cache-size", defaultValue = "100")
     protected int maxEndpointCacheSize;
@@ -25,8 +24,17 @@ public abstract class CamelCommonExceptionHandler extends RouteBuilder {
     @ConfigProperty(name = "notifications.camel.redelivery-delay", defaultValue = "1000")
     long redeliveryDelay;
 
+    @ConfigProperty(name = "mp.messaging.tocamel.topic")
+    protected String toCamelTopic;
+
+    @ConfigProperty(name = "group-id")
+    protected String groupId;
+
     @Inject
     RetryCounterProcessor retryCounterProcessor;
+
+    @Inject
+    protected IncomingCloudEventFilter incomingCloudEventFilter;
 
     protected static final String CAMEL_HTTP_HEADERS_PATTERN = "CamelHttp*";
 
@@ -44,7 +52,7 @@ public abstract class CamelCommonExceptionHandler extends RouteBuilder {
 
     private static final String ERROR_MSG_WITH_CHANNEL = ERROR_MSG_WITH_CHANNEL_PREFIX + "\n${exception.stacktrace}";
 
-    private static final String IS_INTEGRATION_WITH_CHANNEL_EXPRESSION =    "${routeId} in '" + SlackRouteBuilder.SLACK_INCOMING_ROUTE + "," + SlackRouteBuilder.SLACK_OUTGOING_ROUTE + "'";
+    private static final String IS_INTEGRATION_WITH_CHANNEL_EXPRESSION =    "${routeId} in '" + SlackRouteBuilder.SLACK_ROUTE + "'";
 
     protected void configureCommonExceptionHandler() {
 

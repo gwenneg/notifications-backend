@@ -38,7 +38,6 @@ public abstract class CamelRoutesTest extends CamelQuarkusTestSupport {
     @ConfigProperty(name = "mp.messaging.fromcamel.topic")
     protected String kafkaReturnTopic;
 
-    protected String restPath;
     protected String mockPath;
     protected String mockPathKo;
     protected String routeEndpoint;

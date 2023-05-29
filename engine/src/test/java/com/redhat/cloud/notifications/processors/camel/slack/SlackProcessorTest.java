@@ -4,18 +4,21 @@ import com.redhat.cloud.notifications.models.CamelProperties;
 import com.redhat.cloud.notifications.processors.camel.CamelProcessor;
 import com.redhat.cloud.notifications.processors.camel.CamelProcessorTest;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.mockito.InjectMock;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
-import org.mockito.ArgumentCaptor;
+import io.smallrye.reactive.messaging.providers.connectors.InMemoryConnector;
+import io.smallrye.reactive.messaging.providers.connectors.InMemorySink;
+import io.vertx.core.json.JsonObject;
+
+import javax.annotation.PostConstruct;
+import javax.enterprise.inject.Any;
 import javax.inject.Inject;
 import java.util.Map;
 
 
 import static com.redhat.cloud.notifications.TestConstants.DEFAULT_ORG_ID;
+import static com.redhat.cloud.notifications.processors.ConnectorSender.TOCAMEL_CHANNEL;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 @QuarkusTest
 public class SlackProcessorTest extends CamelProcessorTest {
@@ -34,9 +37,16 @@ public class SlackProcessorTest extends CamelProcessorTest {
     @Inject
     SlackProcessor slackProcessor;
 
-    @InjectMock
-    @RestClient
-    InternalTemporarySlackService internalTemporarySlackService;
+    @Inject
+    @Any
+    InMemoryConnector inMemoryConnector;
+
+    InMemorySink<String> inMemorySink;
+
+    @PostConstruct
+    void postConstruct() {
+        inMemorySink = inMemoryConnector.sink(TOCAMEL_CHANNEL);
+    }
 
     @Override
     protected String getQuteTemplate() {
@@ -59,14 +69,18 @@ public class SlackProcessorTest extends CamelProcessorTest {
     }
 
     @Override
-    protected void argumentCaptorChecks() {
-        ArgumentCaptor<SlackNotification> argumentCaptor = ArgumentCaptor.forClass(SlackNotification.class);
-        verify(internalTemporarySlackService, times(1)).send(argumentCaptor.capture());
-        assertEquals(DEFAULT_ORG_ID, argumentCaptor.getValue().orgId);
-        assertNotNull(argumentCaptor.getValue().historyId);
-        assertEquals(WEBHOOK_URL, argumentCaptor.getValue().webhookUrl);
-        assertEquals(CHANNEL, argumentCaptor.getValue().channel);
-        assertEquals(SLACK_EXPECTED_MSG, argumentCaptor.getValue().message);
+    protected void assertPayload() {
+
+        await().until(() -> inMemorySink.received().size() == 1);
+
+        JsonObject payload = new JsonObject(inMemorySink.received().get(0).getPayload());
+        SlackNotification notification = payload.mapTo(SlackNotification.class);
+
+        assertEquals(DEFAULT_ORG_ID, notification.orgId);
+        assertNotNull(notification.historyId);
+        assertEquals(WEBHOOK_URL, notification.webhookUrl);
+        assertEquals(CHANNEL, notification.channel);
+        assertEquals(SLACK_EXPECTED_MSG, notification.message);
     }
 
     @Override
