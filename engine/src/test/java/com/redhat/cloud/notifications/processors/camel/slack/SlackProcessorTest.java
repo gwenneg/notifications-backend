@@ -3,6 +3,8 @@ package com.redhat.cloud.notifications.processors.camel.slack;
 import com.redhat.cloud.notifications.models.CamelProperties;
 import com.redhat.cloud.notifications.processors.camel.CamelProcessor;
 import com.redhat.cloud.notifications.processors.camel.CamelProcessorTest;
+import com.redhat.cloud.notifications.processors.camel.SlackNotification;
+import com.redhat.cloud.notifications.processors.camel.SlackProcessor;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.reactive.messaging.ce.CloudEventMetadata;
 import io.vertx.core.json.JsonObject;

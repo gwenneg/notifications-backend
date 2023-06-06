@@ -34,6 +34,11 @@
             <artifactId>notifications-database</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.redhat.cloud.notifications</groupId>
+            <artifactId>notifications-connector-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Quarkus -->
         <dependency>

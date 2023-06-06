@@ -1,6 +1,7 @@
 package com.redhat.cloud.notifications.processors.camel.slack;
 
 import com.redhat.cloud.notifications.processors.camel.CamelRoutesTest;
+import com.redhat.cloud.notifications.processors.camel.SlackNotification;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import org.apache.camel.builder.AdviceWithRouteBuilder;

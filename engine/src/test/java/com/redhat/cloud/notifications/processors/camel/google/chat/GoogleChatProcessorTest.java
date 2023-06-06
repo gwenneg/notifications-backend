@@ -3,6 +3,7 @@ package com.redhat.cloud.notifications.processors.camel.google.chat;
 import com.redhat.cloud.notifications.TestLifecycleManager;
 import com.redhat.cloud.notifications.processors.camel.CamelProcessor;
 import com.redhat.cloud.notifications.processors.camel.CamelProcessorTest;
+import com.redhat.cloud.notifications.processors.camel.GoogleChatProcessor;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import javax.inject.Inject;

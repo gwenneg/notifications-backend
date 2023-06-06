@@ -1,6 +1,7 @@
 package com.redhat.cloud.notifications.processors.camel.slack;
 
-import com.redhat.cloud.notifications.processors.camel.CamelNotificationProcessorTest;
+import com.redhat.cloud.notifications.processors.camel.CloudEventMetadataProcessorTest;
+import com.redhat.cloud.notifications.processors.camel.SlackNotification;
 import io.quarkus.test.junit.QuarkusTest;
 import io.vertx.core.json.JsonObject;
 import org.apache.camel.Exchange;
@@ -15,7 +16,7 @@ import static com.redhat.cloud.notifications.processors.camel.CamelNotificationP
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @QuarkusTest
-public class SlackNotificationProcessorTest extends CamelNotificationProcessorTest {
+public class SlackNotificationProcessorTest extends CloudEventMetadataProcessorTest {
 
     @Inject
     SlackNotificationProcessor slackNotificationProcessor;

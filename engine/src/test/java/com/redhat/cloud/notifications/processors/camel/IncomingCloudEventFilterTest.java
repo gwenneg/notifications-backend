@@ -1,12 +1,13 @@
 package com.redhat.cloud.notifications.processors.camel;
 
+import com.redhat.cloud.notifications.connector.IncomingCloudEventFilter;
 import io.quarkus.test.junit.QuarkusTest;
 import org.apache.camel.Exchange;
 import org.apache.camel.quarkus.test.CamelQuarkusTestSupport;
 import org.junit.jupiter.api.Test;
 
-import static com.redhat.cloud.notifications.processors.ConnectorSender.X_RH_NOTIFICATIONS_CONNECTOR_HEADER;
-import static com.redhat.cloud.notifications.processors.camel.IncomingCloudEventFilter.EXCEPTION_MSG;
+import static com.redhat.cloud.notifications.connector.IncomingCloudEventFilter.EXCEPTION_MSG;
+import static com.redhat.cloud.notifications.connector.IncomingCloudEventFilter.X_RH_NOTIFICATIONS_CONNECTOR_HEADER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
