@@ -420,3 +420,6 @@ parameters:
 - name: NOTIFICATIONS_DRAWER_CONNECTOR_ENABLED
   description: Is the drawer connector enabled to process them instead of in the engine?
   value: "false"
+- name: NOTIFICATIONS_AGGREGATION_BATCH_SIZE
+  description: Number of aggregation records loaded from the DB during each aggregation process iteration
+  value: "100"
