@@ -28,6 +28,12 @@ jobs:
           java-version: 17
       - name: Build with Maven
         run: ./mvnw clean verify --no-transfer-progress -pl :notifications-common,:notifications-connector-common
+      - uses: actions/upload-artifact@v3
+        name: Upload jar
+        with:
+          retention-days: 1
+          name: commonjar
+          path: connector-common/target/notifications-connector-common*.jar
   test:
     name: Test
     needs: build2
