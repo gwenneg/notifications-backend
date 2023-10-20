@@ -27,7 +27,7 @@ jobs:
           distribution: adopt
           java-version: 17
       - name: Build with Maven
-        run: ./mvnw clean verify --no-transfer-progress -pl :notifications-connector-common
+        run: ./mvnw clean verify --no-transfer-progress -pl :notifications-common,:notifications-connector-common
   test:
     name: Test
     needs: build2
