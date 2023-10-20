@@ -3,6 +3,18 @@ name: Build & Test
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build with Maven
+        run: ./mvnw clean verify --no-transfer-progress -pl :notifications-connector-email
+  test2:
+    name: Test2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build with Maven
+        run: ./mvnw clean verify --no-transfer-progress -pl :notifications-connector-webhook
   build:
     name: Build
     runs-on: ubuntu-latest
