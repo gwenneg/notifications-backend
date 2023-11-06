@@ -72,6 +72,8 @@ public class BOPRequestPreparer implements Processor {
             bopBody = JsonObject.mapFrom(emails);
         }
 
+        System.out.println("==============" + bopBody.encode());
+
         // Specify the message's payload in JSON.
         exchange.getMessage().setBody(bopBody.encode());
 
