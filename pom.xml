@@ -31,6 +31,53 @@
 
     <profiles>
         <profile>
+            <id>default</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <modules>
+                <module>aggregator</module>
+                <module>backend</module>
+                <module>checkstyle</module>
+                <module>common</module>
+                <module>common-aggregator</module>
+                <module>connector-common</module>
+                <module>connector-drawer</module>
+                <module>connector-email</module>
+                <module>connector-google-chat</module>
+                <module>connector-microsoft-teams</module>
+                <module>connector-servicenow</module>
+                <module>connector-slack</module>
+                <module>connector-splunk</module>
+                <module>connector-webhook</module>
+                <module>database</module>
+                <module>engine</module>
+                <module>recipients-resolver</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>connector-apps</id>
+            <modules>
+                <module>connector-drawer</module>
+                <module>connector-email</module>
+                <module>connector-google-chat</module>
+                <module>connector-microsoft-teams</module>
+                <module>connector-servicenow</module>
+                <module>connector-slack</module>
+                <module>connector-splunk</module>
+                <module>connector-webhook</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>not-connector-apps</id>
+            <modules>
+                <module>aggregator</module>
+                <module>backend</module>
+                <module>engine</module>
+                <module>recipients-resolver</module>
+            </modules>
+        </profile>
+        <profile>
             <id>admin-console</id>
             <modules>
                 <module>admin-console</module>
