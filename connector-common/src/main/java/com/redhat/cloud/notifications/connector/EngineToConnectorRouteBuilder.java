@@ -29,6 +29,9 @@ public abstract class EngineToConnectorRouteBuilder extends EndpointRouteBuilder
     @Inject
     RedeliveryPredicate redeliveryPredicate;
 
+    @Inject
+    CamelComponentsConfigurator camelComponentsConfigurator;
+
     @Override
     public void configure() throws Exception {
 
@@ -58,10 +61,12 @@ public abstract class EngineToConnectorRouteBuilder extends EndpointRouteBuilder
                 .to(log(getClass().getName()).level("DEBUG").showProperties(true))
                 .to(seda(ENGINE_TO_CONNECTOR));
 
-        configureRoute();
+        // Camel components must be configured before they are included in Camel routes definitions.
+        camelComponentsConfigurator.configure(getContext());
+        configureRoutes();
     }
 
-    public abstract void configureRoute() throws Exception;
+    public abstract void configureRoutes() throws Exception;
 
     private KafkaEndpointConsumerBuilder buildKafkaEndpoint() {
         return kafka(connectorConfig.getIncomingKafkaTopic())

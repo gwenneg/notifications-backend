@@ -16,7 +16,7 @@ public class DrawerRouteBuilder extends EngineToConnectorRouteBuilder {
     ConnectorConfig drawerConnectorConfig;
 
     @Override
-    public void configureRoute() {
+    public void configureRoutes() {
         from(seda(ENGINE_TO_CONNECTOR))
             .routeId(drawerConnectorConfig.getConnectorName())
             .log(INFO, getClass().getName(), "Sent Drawer notification " +
