@@ -69,21 +69,25 @@ public class SubscriptionsDeduplicationConfig implements EventDeduplicationConfi
          * An org will be notified if it has an enabled endpoint linked to the event type and either:
          * - The endpoint is a machine-to-machine integration (not DRAWER or EMAIL_SUBSCRIPTION), OR
          * - The endpoint is a recipient-based integration (DRAWER or EMAIL_SUBSCRIPTION) AND
-         *   at least one user in the org has an active subscription for this event type
+         *   at least one user in the org has an active subscription for this event type (either via
+         *   the subscribed flag or via any severity subscription in the severities JSON column)
          */
         String hql = """
             SELECT COUNT(e) > 0
             FROM Endpoint e JOIN e.eventTypes et
             WHERE et.id = :eventTypeId AND (e.orgId = :orgId OR e.orgId IS NULL) AND e.enabled = true
             AND (
-                e.compositeType.type NOT IN :recipientsEndpointType
+                e.compositeType.type NOT IN :recipientsEndpointTypes
                 OR (
-                    e.compositeType.type IN :recipientsEndpointType
+                    e.compositeType.type IN :recipientsEndpointTypes
                     AND EXISTS (
                         SELECT 1 FROM EventTypeEmailSubscription es
                         WHERE es.id.orgId = :orgId
                         AND es.id.eventTypeId = :eventTypeId
-                        AND es.subscribed IS true
+                        AND (
+                            es.subscribed IS true
+                            OR CAST(es.severities AS STRING) LIKE '%true%'
+                        )
                     )
                 )
             )
@@ -92,7 +96,7 @@ public class SubscriptionsDeduplicationConfig implements EventDeduplicationConfi
         boolean willBeNotified = entityManager.createQuery(hql, Boolean.class)
                 .setParameter("eventTypeId", eventTypeId)
                 .setParameter("orgId", orgId)
-                .setParameter("recipientsEndpointType", RECIPIENTS_ENDPOINT_TYPES)
+                .setParameter("recipientsEndpointTypes", RECIPIENTS_ENDPOINT_TYPES)
                 .getSingleResult();
 
         Log.debugf("Org %s %s be notified for event type %s", orgId, willBeNotified ? "will" : "will NOT", eventTypeId);
