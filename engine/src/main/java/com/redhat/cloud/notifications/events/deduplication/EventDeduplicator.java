@@ -1,12 +1,12 @@
 package com.redhat.cloud.notifications.events.deduplication;
 
 import com.redhat.cloud.notifications.models.Event;
-
-import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import java.util.Optional;
 
 @ApplicationScoped
 public class EventDeduplicator {
