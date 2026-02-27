@@ -74,7 +74,7 @@ public class SubscriptionsDeduplicationConfig implements EventDeduplicationConfi
         String hql = """
             SELECT COUNT(e) > 0
             FROM Endpoint e JOIN e.eventTypes et
-            WHERE et.id = :eventTypeId AND e.orgId = :orgId AND e.enabled = true
+            WHERE et.id = :eventTypeId AND (e.orgId = :orgId OR e.orgId IS NULL) AND e.enabled = true
             AND (
                 e.compositeType.type NOT IN :recipientsEndpointType
                 OR (
