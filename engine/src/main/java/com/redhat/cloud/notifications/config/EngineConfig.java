@@ -364,9 +364,9 @@ public class EngineConfig {
         }
     }
 
-    public boolean isSubscriptionsDeduplicationWillBeNotifiedEnabled() {
+    public boolean isSubscriptionsDeduplicationWillBeNotifiedEnabled(String orgId) {
         if (unleashEnabled) {
-            return unleash.isEnabled(toggleSubscriptionsDeduplicationWillBeNotified, false);
+            return unleash.isEnabled(toggleSubscriptionsDeduplicationWillBeNotified, UnleashContextBuilder.buildUnleashContextWithOrgId(orgId), false);
         } else {
             return false;
         }

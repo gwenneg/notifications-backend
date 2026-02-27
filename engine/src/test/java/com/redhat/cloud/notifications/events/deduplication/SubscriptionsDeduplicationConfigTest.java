@@ -39,7 +39,7 @@ class SubscriptionsDeduplicationConfigTest {
 
     @BeforeEach
     void setUp() {
-        when(engineConfig.isSubscriptionsDeduplicationWillBeNotifiedEnabled()).thenReturn(true);
+        when(engineConfig.isSubscriptionsDeduplicationWillBeNotifiedEnabled(anyString())).thenReturn(true);
         // Default: org will not be notified
         doReturn(false).when(deduplicationConfig).willBeNotified(anyString(), any(UUID.class));
     }
@@ -130,7 +130,7 @@ class SubscriptionsDeduplicationConfigTest {
     @Test
     void testGetDeduplicationKeyWithFeatureFlagDisabled() {
 
-        when(engineConfig.isSubscriptionsDeduplicationWillBeNotifiedEnabled()).thenReturn(false);
+        when(engineConfig.isSubscriptionsDeduplicationWillBeNotifiedEnabled(anyString())).thenReturn(false);
 
         Event event = givenSubscriptionEvent("test-org", "product-123", "metric-456", "billing-789");
         Optional<String> deduplicationKey = deduplicationConfig.getDeduplicationKey(event);

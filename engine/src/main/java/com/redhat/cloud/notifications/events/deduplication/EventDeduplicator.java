@@ -1,8 +1,8 @@
 package com.redhat.cloud.notifications.events.deduplication;
 
-import java.util.Optional;
-
 import com.redhat.cloud.notifications.models.Event;
+
+import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
