@@ -1,5 +1,7 @@
 # Testing Guidelines
 
+Rules and conventions for testing in `notifications-backend`, derived from existing patterns. All agents MUST follow these during implementation and review.
+
 ## Framework and Annotations
 
 All tests in this repository are Quarkus-based integration tests using JUnit 5. There are no separate unit test source sets.

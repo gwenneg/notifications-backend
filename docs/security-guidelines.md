@@ -1,6 +1,6 @@
 # Security Guidelines
 
-This document captures repo-specific security conventions and patterns for the notifications-backend codebase. It is intended for implementation and review agents.
+Rules and conventions for security in `notifications-backend`, derived from existing patterns. All agents MUST follow these during implementation and review.
 
 ## 1. Authentication Architecture
 

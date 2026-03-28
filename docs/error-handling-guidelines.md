@@ -1,5 +1,7 @@
 # Error Handling Guidelines
 
+Rules and conventions for error handling in `notifications-backend`, derived from existing patterns. All agents MUST follow these during implementation and review.
+
 ## 1. Custom Exception Hierarchy
 
 ### Existing exceptions and when to use them

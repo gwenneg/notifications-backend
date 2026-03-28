@@ -1,5 +1,7 @@
 # Integration Guidelines
 
+Rules and conventions for integrations in `notifications-backend`, derived from existing patterns. All agents MUST follow these during implementation and review.
+
 ## Architecture Overview
 
 This repository has two connector framework generations running in parallel:

@@ -1,5 +1,7 @@
 # Database Guidelines
 
+Rules and conventions for database usage in `notifications-backend`, derived from existing patterns. All agents MUST follow these during implementation and review.
+
 ## Flyway Migration Conventions
 
 ### File Naming

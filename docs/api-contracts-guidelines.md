@@ -1,6 +1,6 @@
 # API Contracts Guidelines
 
-Rules derived from the notifications-backend codebase for implementing and reviewing REST API contracts.
+Rules and conventions for REST API contracts in `notifications-backend`, derived from existing patterns. All agents MUST follow these during implementation and review.
 
 ## 1. API Versioning Strategy
 
