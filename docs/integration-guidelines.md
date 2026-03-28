@@ -159,8 +159,8 @@ if (auth.isPresent() && BEARER == auth.get().authenticationType) {
 - Large email payloads exceeding `kafkaToCamelMaximumRequestSize` are stored in the database (`PayloadDetails`) and referenced by ID in the Kafka message.
 
 ## Testing Conventions
-- Use `@QuarkusTest` for all integration tests.
-- v2 connector tests extend `BaseConnectorIntegrationTest` (or `BaseHttpConnectorIntegrationTest` for HTTP connectors).
+- **v2 connector tests**: Use `@QuarkusTest` and extend `BaseConnectorIntegrationTest` (or `BaseHttpConnectorIntegrationTest` for HTTP connectors).
+- **v1 Camel connector tests**: Extend `ConnectorRoutesTest` (which extends `CamelQuarkusTestSupport`). Do not use `@QuarkusTest`.
+- **Backend/engine integration tests**: Use `@QuarkusTest` with `@QuarkusTestResource(TestLifecycleManager.class)`.
 - Use WireMock (`MockServerLifecycleManager`) for external service mocking.
 - Use `MicrometerAssertionHelper` for verifying metric values in tests.
-- Use `@QuarkusTestResource(TestLifecycleManager.class)` for lifecycle management.

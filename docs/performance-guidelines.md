@@ -100,7 +100,7 @@ Always use `JOIN FETCH` in JPQL when you need associated entities to avoid N+1 q
 Use offset-based pagination with configurable page size (`recipientsResolverConfig.getMaxResultsPerPage()`). Loop until the returned page is smaller than the max page size. See `FetchUsersFromExternalServices.getWithPagination()`.
 
 ### 5.4 Flyway migrations
-Never run Flyway migrations in production (`%prod` profile). Migrations are the responsibility of `notifications-backend`. Only `%dev` and `%test` profiles auto-migrate.
+The backend service runs Flyway migrations at startup in all profiles (including prod). Engine and aggregator only auto-migrate in `%dev`/`%test` profiles. See `docs/database-guidelines.md` for migration conventions.
 
 ## 6. Retry and Resilience Patterns
 

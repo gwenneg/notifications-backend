@@ -12,8 +12,8 @@
 - Name V2 classes `{Domain}ResourceV2.java` (e.g., `EndpointResourceV2`, `NotificationResourceV2`)
 - Use a `{Domain}ResourceCommon.java` base class for shared logic between V1 and V2
 
-### 1.3 Versioned Inner Class Pattern (CRITICAL)
-Resources do NOT place `@Path` on the outer class. Instead, they use a **static inner class** to bind the version path:
+### 1.3 Versioned Inner Class Pattern (Preferred for Versioned Resources)
+Resources that exist in multiple API versions use a **static inner class** to bind the version path, keeping `@Path` off the outer class:
 ```java
 public class EndpointResource extends EndpointResourceCommon {
 
@@ -31,7 +31,15 @@ public class EndpointResourceV2 extends EndpointResourceCommon {
     }
 }
 ```
-Never put `@Path` with the base API path directly on the outer resource class. The inner class inherits all methods.
+Use this pattern for any new resource that needs V1/V2 versioning. The inner class inherits all methods from the outer class.
+
+### 1.4 Outer-Class `@Path` (Allowed for Single-Version Resources)
+Resources that exist in only one version place `@Path` directly on the class. This is common for:
+- **Internal API resources** (e.g., `InternalResource`, `TemplateResource`, `ValidationResource`) -- all use `@Path(API_INTERNAL + "/...")` on the class
+- **Single-version public handlers** (e.g., `StatusResource`, `UserConfigResource`, `OApiResource`) -- use `@Path(API_NOTIFICATIONS_V_1_0 + "/...")` on the class
+- **Utility resources** across modules (e.g., `HeapDumpResource`, `KafkaAdminResource`)
+
+When modifying an existing resource, follow the pattern it already uses. Only refactor to the inner-class pattern if adding a second API version.
 
 ## 2. API Path Constants
 
@@ -189,9 +197,3 @@ Use `@Content(mediaType = APPLICATION_JSON, schema = @Schema(implementation = Dt
 - Use descriptive string messages in exceptions: `throw new BadRequestException("Properties is required")`
 - Define error message constants as `public static final String` in the resource class
 - Never return raw error maps; let the framework exception mappers handle error responses
-
-## 12. Transaction Management
-
-- Use `@Transactional` on methods that modify data (create, update, delete)
-- For operations requiring cleanup on failure (e.g., secrets), wrap in try/catch and clean up explicitly
-- Use `@TransactionConfiguration` only for extended timeout scenarios

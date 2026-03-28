@@ -17,7 +17,7 @@ class MyResourceTest extends DbIsolatedTest {
 }
 ```
 
-- Always annotate with `@QuarkusTest` for integration tests.
+- Annotate integration tests with `@QuarkusTest`, except v1 Camel connector tests which extend `CamelQuarkusTestSupport` instead (see section 11).
 - Always add `@QuarkusTestResource(TestLifecycleManager.class)` -- each module has its own `TestLifecycleManager`.
 - For tests touching the database (backend, engine, aggregator), extend `DbIsolatedTest` to get automatic before/after cleanup.
 
@@ -180,26 +180,11 @@ Header header = TestHelpers.createRHIdentityHeader(identity);
 
 - **JaCoCo** (`0.8.x`) via `quarkus-jacoco` extension. Reports go to `target/jacoco-report/jacoco.xml`.
 - **SonarQube** reads from `sonar.coverage.jacoco.xmlReportPaths`.
-- **Checkstyle** rules enforced at build time:
-  - No tabs, no trailing whitespace, newline at end of file.
-  - No star imports (except static).
-  - No JUnit 4 imports.
-  - No `@author` tags.
-  - Braces required, EOL style.
-  - 4-space indentation.
+- **Checkstyle** rules enforced at build time: no tabs, no trailing whitespace, no star imports (except static), no JUnit 4 imports, no `@author` tags, braces required (EOL style), 4-space indentation.
 
 ## 17. Running Tests
 
-```bash
-# Run all tests for a specific module
-./mvnw test -pl backend
-
-# Run a single test class
-./mvnw test -pl backend -Dtest=EndpointResourceTest
-
-# Run all tests
-./mvnw verify
-```
+- Single module: `./mvnw test -pl backend`; single class: `./mvnw test -pl backend -Dtest=EndpointResourceTest`; all: `./mvnw verify`.
 
 ## 18. Common Pitfalls
 

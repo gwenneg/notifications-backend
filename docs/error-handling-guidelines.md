@@ -48,7 +48,7 @@ Rules and conventions for implementing and reviewing error handling in the notif
 - Standard pattern: `@Retry(maxRetries = 3)` for REST client calls to internal services (Sources, Export Service, Engine).
 - For Kessel gRPC: `@Retry(maxRetries = 3, delay = 100, retryOn = KesselTransientException.class)` -- only retry on the marker exception, not all failures.
 - For connector REST clients (v2): `@Retry(delay = 1, delayUnit = ChronoUnit.SECONDS, maxRetries = 2)` -- always add a comment clarifying total attempts (e.g., "1 initial + 2 retries = 3 attempts").
-- Never use `@Retry` without specifying `maxRetries`. The default is unbounded.
+- The MicroProfile Fault Tolerance default for `maxRetries` is 3. Always specify `maxRetries` explicitly for clarity (`-1` would mean unbounded, but is never used in this repo).
 
 ### Mutiny Retry (ConsoleIdentityProvider)
 - Used for RBAC calls: `.onFailure(IOException | ConnectTimeoutException).retry().withBackOff(initial, max).atMost(n)`.
