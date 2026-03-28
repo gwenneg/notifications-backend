@@ -12,6 +12,7 @@ This repo caches DB lookups (event types, templates, bundles), RBAC calls, and r
 - Use short TTLs for volatile data (e.g., `PT1M` for recipients-resolver results) and longer TTLs for stable reference data (e.g., `PT15M` for bundles/apps).
 
 ### 1.2 Existing cache TTL conventions
+
 | Cache | TTL | Module |
 |---|---|---|
 | `event-types-from-baet` / `event-types-from-fqn` | 5 min | engine |
