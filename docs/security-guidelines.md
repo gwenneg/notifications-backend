@@ -116,7 +116,7 @@ Every new repository method that accesses tenant data must follow this pattern.
 ## 6. Input Validation Conventions
 
 ### 6.1 DTO Validation
-- All request body parameters must use `@NotNull @Valid @RequestBody` on endpoint methods.
+- All request body parameters must use `@NotNull @Valid` on endpoint methods. The `@RequestBody` annotation is optional and used only for OpenAPI documentation.
 - DTOs use Jakarta Bean Validation annotations:
   - `@NotNull` for required fields
   - `@Size(max = N)` for string length limits (e.g., 255 for names, 32 for tokens, 20 for sub-types)
