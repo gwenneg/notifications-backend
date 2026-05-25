@@ -1,0 +1,16 @@
+#!/bin/bash
+# Reminds contributors to process friction files before they pile up.
+#
+# Blocks only after FRICTION_SESSION_THRESHOLD distinct sessions have accumulated
+# (default: 3), so a single busy session with many friction events doesn't
+# block every subsequent push.
+
+FRICTION_DIR=".claude/friction"
+THRESHOLD="${FRICTION_SESSION_THRESHOLD:-3}"
+
+SESSION_COUNT=$(find "$FRICTION_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+
+if [ "${SESSION_COUNT:-0}" -ge "$THRESHOLD" ]; then
+  echo "Push blocked: $SESSION_COUNT session(s) with unprocessed friction in .claude/friction/. Run /update-context-docs to improve the repo docs, or use --no-verify to skip." >&2
+  exit 1
+fi

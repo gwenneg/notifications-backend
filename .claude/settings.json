@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/friction-hook.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
